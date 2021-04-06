@@ -33,22 +33,6 @@ class TimesDataset(Dataset):
     def __getitem__(self, idx):
         return self.times[idx]
 
-def calculate_warping(input_features, len_input, len_output):
-    # Calculate grid of shape (N, Hout, Wout, 2)
-    grid = th.zeros(size=(1, 512, len_output, 2))
-    output_times = 2 * th.FloatTensor(list(range(0, len_output))) / len_output - 1
-    input_times = output_times # warping is scaling 
-    for i in range(512):
-        grid[:, i, :, 0] = 2*i/512 - 1
-        grid[:, i, :, 1] = input_times
-    
-    # Reshape input features to dimension (N, C, Hin, Win) = (1,1,512,len_input)
-    input_features = input_features.unsqueeze(0).unsqueeze(0)
-    warped_input_features = grid_sample(input_features, grid, mode='bilinear',
-                padding_mode='zeros', align_corners=None)
-    warped_input_features = warped_input_features.squeeze(0).squeeze(0)
-
-    return warped_input_features
 
 
 def get_plot(input_times, output_times, gt_times):
