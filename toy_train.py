@@ -209,31 +209,26 @@ if __name__ == "__main__":
             # Visualize movie
             if epoch == 0:
                 # Visualize toy input feats
-                grid_toy_input_feats = torchvision.utils.make_grid(toy_input_feats[:f_len,i_len:ii_len].unsqueeze(0).unsqueeze(0))
-                writer.add_image(f"Toy input feats {i_len}:{ii_len}", grid_toy_input_feats, 0)
+                writer.add_image(f"Toy input feats {i_len}:{ii_len}", toy_input_feats[:f_len, i_len:ii_len].T, 0,  dataformats='HW')
 
                 # Visualize output feats
-                grid_output_feats = torchvision.utils.make_grid(output_feats[:f_len,o_len:oo_len].unsqueeze(0).unsqueeze(0))
-                writer.add_image(f"Output feats {o_len}:{oo_len}", grid_output_feats, 0)
+                writer.add_image(f"Output feats {o_len}:{oo_len}", output_feats[:f_len, o_len:oo_len].T, 0, dataformats='HW')
                 
                 # Visualize gt pred output feats
-                # from toy_input_feats to gt_output_feats (input -> output)
-                gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type)
-                grid_gt_output_feats = torchvision.utils.make_grid(gt_output_feats[:f_len,o_len:oo_len].unsqueeze(0).unsqueeze(0))
-                writer.add_image(f"GT predicted output feats {o_len}:{oo_len}", grid_gt_output_feats, 0)
+                gt_output_feats = gt_output_feats[:f_len, o_len:oo_len]
+                writer.add_image(f"GT predicted output feats {o_len}:{oo_len}", gt_output_feats.T, 0, dataformats='HW')
                 
                 # Visualize difference of gt pred output feats and output feats
-                grid_diff_gt_output_feats = torchvision.utils.make_grid(gt_output_feats[:f_len,o_len:oo_len] - output_feats[:f_len,o_len:oo_len].unsqueeze(0).unsqueeze(0))
-                writer.add_image(f"GT difference {o_len}:{oo_len}", grid_diff_gt_output_feats, 0)
-                
+                diff_gt_output_feats = gt_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
+                writer.add_image(f"GT difference {o_len}:{oo_len}", diff_gt_output_feats.T, 0, dataformats='HW')
+
                 
             # Visualize predicted output feats
-            grid_pred_output_feats = torchvision.utils.make_grid(pred_output_feats[:f_len,o_len:oo_len].unsqueeze(0).unsqueeze(0))
-            writer.add_image(f"Pred output feats {o_len}:{oo_len}", grid_pred_output_feats, epoch)
+            writer.add_image(f"Pred output feats {o_len}:{oo_len}", pred_output_feats[:f_len, o_len:oo_len].T, epoch, dataformats='HW')
             
             # Visualize difference of pred output feats and output feats
-            grid_diff_pred_output_feats = torchvision.utils.make_grid(pred_output_feats[:f_len,o_len:oo_len] - output_feats[:f_len,o_len:oo_len].unsqueeze(0).unsqueeze(0))
-            writer.add_image(f"Pred difference {o_len}:{oo_len}", grid_diff_pred_output_feats, epoch)
+            diff_pred_output_feats = pred_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
+            writer.add_image(f"Pred difference {o_len}:{oo_len}", diff_pred_output_feats.T, epoch, dataformats='HW')
             
             
             # Visualize mapping

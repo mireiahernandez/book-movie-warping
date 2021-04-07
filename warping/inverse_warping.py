@@ -44,7 +44,7 @@ def inverse_warping_1_dim(input_features, output_times):
                         padding_mode='zeros', align_corners=True)
 
     # Resize output features to (512, len_output)
-    output_features =output_features.squeeze(0).squeeze(0)
+    output_features = output_features.squeeze(0).squeeze(0)
 
     return output_features
 
