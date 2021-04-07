@@ -72,6 +72,10 @@ if __name__ == "__main__":
     # exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_noSigmoid_weightdecay_{weight_decay}_h1_{hidden_size1}_h2_{hidden_size2}_lr_{lr}_batchsize_{batch_size}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
 
+    if th.cuda.is_available():
+        device = 'cuda:2'
+    else:
+        device = 'cpu:0'
     # Get feats
     image_feats = np.load(f"data/{args.movie}/image_features.npy")
     text_feats = np.load(f"data/{args.movie}/text_features.npy")
@@ -93,7 +97,7 @@ if __name__ == "__main__":
     if direction == 'm2b':
         input_feats = image_feats
         len_input = len_image
-        output_feats = text_feats
+        output_feats = text_feats.to(device)
         len_output = len_text
     else: 
         input_feats = text_feats
@@ -102,8 +106,8 @@ if __name__ == "__main__":
         len_output = len_image
 
     # Get input and output times
-    input_times = th.FloatTensor(np.arange(len_input)) 
-    output_times = th.FloatTensor(np.arange(len_output))
+    input_times = th.FloatTensor(np.arange(len_input)).to(device)
+    output_times = th.FloatTensor(np.arange(len_output)).to(device)
     
     # Scale input and output times to [0,1]
     input_times_scaled = input_times / (len_input - 1)
@@ -111,25 +115,26 @@ if __name__ == "__main__":
     
     # Get f times: from input -> output (shape Ni)
     f_times = input_times * (len_output - 1) / (len_input - 1)
-    
+    f_times = f_times.to(device)
     # Get invf times: from output -> input (shape No)
     invf_times = output_times * (len_input - 1) / (len_output - 1)
+    invf_times = invf_times.to(device)
     
     # Get toy input feats: output_feats -> toy_input_feats
     # we need the reverse mapping input -> output
-    toy_input_feats = reverse_mapping(output_feats, f_times, kernel_type)
+    toy_input_feats = reverse_mapping(output_feats, f_times, kernel_type, device).to(device)
 
     # from toy_input_feats to gt_output_feats (input -> output)
-    gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type)
+    gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type, device).to(device)
 
     # Create times dataset and dataloader
     dataset = TimesDataset(output_times_scaled)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, sampler=None,
-                batch_sampler=None, num_workers=1, collate_fn=None)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False) #, sampler=None,
+                #batch_sampler=None, num_workers=1, collate_fn=None)
     
     # Define model
-    model = MLP(input_size, hidden_size1, hidden_size2, output_size)
-    
+    model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
+    model= model.to(device)    
     # Define loss function
     loss_reconstruction = ReconstructionLoss()
     loss_cosine = CosineDistanceLoss()
@@ -144,12 +149,13 @@ if __name__ == "__main__":
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while abs(loss_prev - loss_now) > 1e-10:
+    while epoch < 500: #abs(loss_prev - loss_now) > 1e-10:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
         for i, batch in enumerate(tqdm(dataloader)):
             batch, idx = batch
+            batch, idx = batch.to(device), idx.to(device)
             invf_output = model.forward(batch.unsqueeze(1))
             pred_invf_times_scaled.append(invf_output)
             index.append(idx)
@@ -157,18 +163,18 @@ if __name__ == "__main__":
         # outputs are between 0 and 1 and have shape (No)
         pred_invf_times_scaled = th.cat(pred_invf_times_scaled, dim=0).squeeze(1) # shape No
         index = th.cat(index, dim=0)
-        pred_invf_times_scaled = pred_invf_times_scaled[index]
+        #pred_invf_times_scaled = pred_invf_times_scaled[index]
         
         # re-scale to 0 len_output -1
         pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
 
         # do inverse warping
-        pred_output_feats = reverse_mapping(toy_input_feats, pred_invf_times, kernel_type)
+        pred_output_feats = reverse_mapping(toy_input_feats, pred_invf_times, kernel_type, device).to(device)
 
         # Compute reconstruction loss
-        lossR = loss_reconstruction(output_feats, pred_output_feats)
+        lossR = loss_reconstruction(output_feats, pred_output_feats.to(device))
         #lossCD = loss_cosine(output_feats, pred_output_feats)
-        lossGT = loss_gt(pred_invf_times_scaled, invf_times / (len_input - 1))
+        lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
 
         # Write to tensorboard
         writer.add_scalar("LossR/train", lossR, epoch)
@@ -233,7 +239,7 @@ if __name__ == "__main__":
             
             # Visualize mapping
             pred_invf_times_copy = pred_invf_times.clone().detach()
-            plot_buf = get_plot(output_times, pred_invf_times_copy, invf_times)
+            plot_buf = get_plot(output_times.cpu(), pred_invf_times_copy.cpu(), invf_times.cpu())
             
             image = PIL.Image.open(plot_buf)
             image = ToTensor()(image)

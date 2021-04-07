@@ -51,14 +51,15 @@ def inverse_warping_1_dim(input_features, output_times):
 def linear_kernel(dif):
     return th.max(th.ones(size=dif.shape) - dif, th.zeros(size=dif.shape))
 
-def gaussian_kernel(dif):
+def gaussian_kernel(dif, device):
     # gaussian centered at t with mean 0 and std 1
     # evaluated at s
     std = 0.5
-    norm = std*th.sqrt(th.FloatTensor([2*np.pi]))
-    return th.exp(-th.square(dif/std)/2) / norm
+    norm = std*th.sqrt(th.FloatTensor([2*np.pi]).to(device))
+    return th.exp(-th.square(dif/std)/2).to(device) / norm
 
-def reverse_mapping(src, invf_times, kernel_type):
+def reverse_mapping(src, invf_times, kernel_type, device):
+    device='cpu:0'
     # Get dst and src lengths (1-dim)
     len_dst = invf_times.shape[0]
     len_src = src.shape[1]
@@ -67,8 +68,8 @@ def reverse_mapping(src, invf_times, kernel_type):
     dst = th.zeros(size=(src.shape[0], len_dst))
     
     # Obtain a grid of pairs of integer pixels and inverse mapped pixels
-    src_times = th.FloatTensor(np.arange(len_src))
-    pairs = th.cartesian_prod(src_times, invf_times).reshape((len_src, len_dst, 2))
+    src_times = th.FloatTensor(np.arange(len_src)).to(device)
+    pairs = th.cartesian_prod(src_times, invf_times.to(device)).reshape((len_src, len_dst, 2))
 
     # obtain the absolute value of the difference between elements of the said pairs
     abs_dif = th.abs(pairs[:,:,0] - pairs[:,:,1])
@@ -76,7 +77,7 @@ def reverse_mapping(src, invf_times, kernel_type):
     # calculate the weights matrix
     # weights[i,j]: weight that multiplies src[i] in dst[j]
     # shape (len_src, len_dst)
-    if kernel_type == "gaussian": weights = gaussian_kernel(abs_dif)
+    if kernel_type == "gaussian": weights = gaussian_kernel(abs_dif, device)
     elif kernel_type == "linear": weights = linear_kernel(abs_dif)
 
     # calculate
@@ -94,7 +95,7 @@ def reverse_mapping(src, invf_times, kernel_type):
                     stride=len_src, padding=0, dilation=1, groups=1, bias=False,
                     padding_mode='zeros')
     
-    conv1d.weight = th.nn.Parameter(src.unsqueeze(1))
+    conv1d.weight = th.nn.Parameter(src.unsqueeze(1).to(device))
     dst = conv1d(weights.unsqueeze(0).unsqueeze(0)).squeeze(0)
     
     return dst
