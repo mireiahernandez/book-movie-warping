@@ -113,10 +113,18 @@ if __name__ == "__main__":
     # Get feats
     image_feats = np.load(f"data/{args.movie}/image_features.npy")
     text_feats = np.load(f"data/{args.movie}/text_features.npy")
-    
-    # Transform to tensors
+
+
+    if blur:
+        kernel = np.array([[1, 4, 6, 4, 1]])/16
+        text_feats = signal.convolve2d(text_feats.T, kernel, mode='valid', boundary='wrap')
+        text_feats = th.FloatTensor(text_feats)
+    else:
+        text_feats = th.FloatTensor(text_feats).T
+
+        # Transform to tensors
     image_feats = th.FloatTensor(image_feats).T # shape (512, Nm)
-    text_feats = th.FloatTensor(text_feats).T # shape (512, Nb)
+    # text_feats = th.FloatTensor(text_feats).T # shape (512, Nb)
     
     # Normalize
     image_feats /= image_feats.norm(dim=0, keepdim=True)
