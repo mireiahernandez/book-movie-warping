@@ -21,6 +21,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import scipy.signal as signal
 
 
 class TimesDataset(Dataset):
@@ -45,6 +47,34 @@ def get_plot(input_times, output_times, gt_times):
     return buf
 
 
+def plot_diff(text_feats, pred_output_ft, gt_output_feats):
+    diff = pred_output_ft - gt_output_feats
+    _min = min(text_feats.min(), toy_input_feats.min(), gt_output_feats.min(),
+               diff.min())
+    _max = max(text_feats.max(), toy_input_feats.max(), gt_output_feats.max(),
+               diff.max())
+    X = 512
+    Y = 300
+    images = []
+    plt.figure(figsize=(30, 30))
+    f, axarr = plt.subplots(2, 2)
+    images.append(axarr[0, 1].imshow(text_feats[:Y, :X], vmin=_min, vmax=_max))
+    plt.colorbar(images[0], ax=axarr[0, 1])
+    axarr[0, 1].set_title('Original image')
+    images.append(axarr[1, 0].imshow(pred_output_ft[:Y, :X], vmin=_min, vmax=_max))
+    plt.colorbar(images[1], ax=axarr[1, 0])
+    axarr[1, 0].set_title('Predicted features')
+    images.append(axarr[1, 1].imshow(gt_output_feats[:Y, :X], vmin=_min, vmax=_max))
+    plt.colorbar(images[2], ax=axarr[1, 1])
+    axarr[1, 1].set_title('Reverse mapping from \n reverse mapping')
+    images.append(axarr[0, 0].imshow(diff[:Y, :X], vmin=_min, vmax=_max))
+    plt.colorbar(images[3], ax=axarr[0, 0])
+    axarr[0, 0].set_title('Difference between reverse \n mapping and prediction')
+    buf = io.BytesIO()
+    plt.savefig(buf, format='jpeg')
+    buf.seek(0)
+    return buf
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
@@ -52,6 +82,9 @@ if __name__ == "__main__":
     parser.add_argument('--loss_type', default='GT', type=str, help='GT or R')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, help='kernel type')
+    parser.add_argument('--exp_info', type=str)
+    parser.add_argument('--blur', type=str)
+
     args = parser.parse_args()
     
     # Define parameters
@@ -61,19 +94,20 @@ if __name__ == "__main__":
     output_size = 1
     num_epochs = 100000
     lr = 1e-4
-    weight_decay = 1e-5
+    weight_decay = 1e-4
     batch_size = 512
     direction = args.direction
     loss_type = args.loss_type
     kernel_type = args.kernel_type
+    blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_SHUFFLE_try_{args.try_num}"
+    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_{args.exp_info}_try_{args.try_num}"
     # exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_noSigmoid_weightdecay_{weight_decay}_h1_{hidden_size1}_h2_{hidden_size2}_lr_{lr}_batchsize_{batch_size}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
 
     if th.cuda.is_available():
-        device = 'cuda:2'
+        device = 'cuda:0'
     else:
         device = 'cpu:0'
     # Get feats
@@ -212,39 +246,28 @@ if __name__ == "__main__":
 
             # Define feature segment to visualize
             f_len = 100
-            # Visualize movie
-            if epoch == 0:
-                # Visualize toy input feats
-                writer.add_image(f"Toy input feats {i_len}:{ii_len}", toy_input_feats[:f_len, i_len:ii_len].T, 0,  dataformats='HW')
-
-                # Visualize output feats
-                writer.add_image(f"Output feats {o_len}:{oo_len}", output_feats[:f_len, o_len:oo_len].T, 0, dataformats='HW')
-                
-                # Visualize gt pred output feats
-                gt_output_feats = gt_output_feats[:f_len, o_len:oo_len]
-                writer.add_image(f"GT predicted output feats {o_len}:{oo_len}", gt_output_feats.T, 0, dataformats='HW')
-                
-                # Visualize difference of gt pred output feats and output feats
-                diff_gt_output_feats = gt_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
-                writer.add_image(f"GT difference {o_len}:{oo_len}", diff_gt_output_feats.T, 0, dataformats='HW')
-
-                
-            # Visualize predicted output feats
-            writer.add_image(f"Pred output feats {o_len}:{oo_len}", pred_output_feats[:f_len, o_len:oo_len].T, epoch, dataformats='HW')
-            
-            # Visualize difference of pred output feats and output feats
-            diff_pred_output_feats = pred_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
-            writer.add_image(f"Pred difference {o_len}:{oo_len}", diff_pred_output_feats.T, epoch, dataformats='HW')
+            # # Visualize movie
+            #
+            #
+            # # Visualize predicted output feats
+            # writer.add_image(f"Pred output feats {o_len}:{oo_len}", pred_output_feats[:f_len, o_len:oo_len], epoch, dataformats='HW')
+            #
+            # # Visualize difference of pred output feats and output feats
+            # diff_pred_output_feats = pred_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
+            # writer.add_image(f"Pred difference {o_len}:{oo_len}", diff_pred_output_feats, epoch, dataformats='HW')
             
             
             # Visualize mapping
             pred_invf_times_copy = pred_invf_times.clone().detach()
             plot_buf = get_plot(output_times.cpu(), pred_invf_times_copy.cpu(), invf_times.cpu())
+            plot_buf_img = plot_diff(text_feats.data.numpy(), pred_output_feats.data.numpy(), gt_output_feats.data.numpy())
             
-            image = PIL.Image.open(plot_buf)
-            image = ToTensor()(image)
+            image, vis = PIL.Image.open(plot_buf), PIL.Image.open(plot_buf_img)
+            image, vis = ToTensor()(image), ToTensor()(vis)
             writer.add_image('Mapping', image, epoch)
+            writer.add_image('Visualization', vis, epoch)
             plot_buf.close()
+            plot_buf_img.close()
         
         
         epoch += 1

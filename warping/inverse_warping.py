@@ -54,11 +54,11 @@ def linear_kernel(dif):
 def gaussian_kernel(dif, device):
     # gaussian centered at t with mean 0 and std 1
     # evaluated at s
-    std = 0.5
+    std = .5
     norm = std*th.sqrt(th.FloatTensor([2*np.pi]).to(device))
     return th.exp(-th.square(dif/std)/2).to(device) / norm
 
-def reverse_mapping(src, invf_times, kernel_type, device):
+def reverse_mapping(src, invf_times, kernel_type):
     device='cpu:0'
     # Get dst and src lengths (1-dim)
     len_dst = invf_times.shape[0]
