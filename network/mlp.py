@@ -5,7 +5,7 @@ class MLP(nn.Module):
     def __init__(self, input_size, hidden_size1, hidden_size2, output_size, device):
         super(MLP, self).__init__()
         self.input_size = input_size
-        self.hidden_size1  = hidden_size1
+        self.hidden_size1 = hidden_size1
         self.hidden_size2 = hidden_size2
         self.output_size = output_size
 

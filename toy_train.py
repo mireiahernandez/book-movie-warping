@@ -204,8 +204,8 @@ if __name__ == "__main__":
 
         # outputs are between 0 and 1 and have shape (No)
         pred_invf_times_scaled = th.cat(pred_invf_times_scaled, dim=0).squeeze(1) # shape No
-        index = th.cat(index, dim=0)
-        #pred_invf_times_scaled = pred_invf_times_scaled[index]
+        # index = th.cat(index, dim=0).argsort()
+        # pred_invf_times_scaled = pred_invf_times_scaled[index]
         
         # re-scale to 0 len_output -1
         pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
@@ -226,6 +226,9 @@ if __name__ == "__main__":
                
         # Backpropagate and update losses
         loss_prev = loss_now
+        optimizer.zero_grad()
+        if loss_now > loss_prev:
+            lr *= 0.1
         if loss_type == "GT":
             lossGT.backward()
             loss_now = lossGT
