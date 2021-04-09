@@ -15,6 +15,7 @@ from loss.losses import GTDifLoss, GTNormLoss
 from utils import get_plot, plot_diff, visualize_input
 
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 import numpy as np
 import os
@@ -46,7 +47,9 @@ if __name__ == "__main__":
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
 
     args = parser.parse_args()
-    
+
+
+
     # Define parameters
     input_size = 1
     hidden_size1 = 64
@@ -64,6 +67,9 @@ if __name__ == "__main__":
     # Tensorboard summary writer
     exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_{args.exp_info}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
+    wandb.init(project="dynamic-model", entity="the-dream-team")
+    wandb.run.name = exp_name
+    wandb.config.update(args)
 
     if th.cuda.is_available():
         device = 'cuda:0'
@@ -140,6 +146,10 @@ if __name__ == "__main__":
     # Define model
     model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
+
+    # Log model training
+    wandb.watch(model, log="all")
+
     # Define loss function
     loss_reconstruction = ReconstructionLoss()
     loss_cosine = CosineDistanceLoss()
@@ -182,9 +192,12 @@ if __name__ == "__main__":
         lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
 
         # Write to tensorboard
-        writer.add_scalar("LossR/train", lossR, epoch)
-        writer.add_scalar("LossGT/train", lossGT, epoch)
-        #writer.add_scalar("LossCD/train", lossCD, epoch)
+        # writer.add_scalar("LossR/train", lossR, epoch)
+        # writer.add_scalar("LossGT/train", lossGT, epoch)
+        # #writer.add_scalar("LossCD/train", lossCD, epoch)
+        wandb.log({'epoch': epoch,
+                   'reconstruction_loss': lossR,
+                   'ground_truth_loss': lossGT})
     
                
         # Backpropagate and update losses
@@ -221,14 +234,14 @@ if __name__ == "__main__":
 
             if epoch == 0:
                 # Visualize input and output
-                visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy(), writer)
+                visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
             
             
             # Visualize mapping
-            get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu(), writer, epoch)
+            get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu())
             plot_diff(text_feats.cpu().data.numpy(),
                                      pred_output_feats.cpu().data.numpy(),
-                                     gt_output_feats.cpu().data.numpy(), writer, epoch)
+                                     gt_output_feats.cpu().data.numpy())
 
 
         
@@ -236,11 +249,11 @@ if __name__ == "__main__":
         epoch += 1
     
     end_time = time.time()
-    writer.flush()
-    writer.close()
+
 
     save_path = f"outputs/{args.movie}"
     #losses = losses.detach().numpy()
     #np.save(f"{save_path}/{exp_name}_loss.npy", losses)
     th.save(model.state_dict(), f"{save_path}/{exp_name}_model.pt")
+    # wandb.save('model.h5')
  
