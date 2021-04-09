@@ -5,25 +5,22 @@ from torch.utils.data import Dataset, DataLoader
 import argparse
 from tqdm import tqdm 
 import time
-import torchvision
-import io
 
-import PIL.Image
-from torchvision.transforms import ToTensor
 
 from network.mlp import MLP
 from warping.inverse_warping import reverse_mapping
 from torch.nn.functional import grid_sample
 from loss.losses import ReconstructionLoss, CosineDistanceLoss
 from loss.losses import GTDifLoss, GTNormLoss
+from utils import get_plot, plot_diff, visualize_input
 
 from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import scipy.signal as signal
 
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class TimesDataset(Dataset):
     def __init__(self, times):
@@ -37,44 +34,6 @@ class TimesDataset(Dataset):
 
 
 
-def get_plot(input_times, output_times, gt_times):
-    plt.close()
-    plt.plot(input_times, output_times, 'r-')
-    plt.plot(input_times, gt_times, 'g-')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='jpeg')
-    buf.seek(0)
-    return buf
-
-
-def plot_diff(text_feats, pred_output_ft, gt_output_feats):
-    diff = pred_output_ft - gt_output_feats
-    _min = min(text_feats.min(), toy_input_feats.min(), gt_output_feats.min(),
-               diff.min())
-    _max = max(text_feats.max(), toy_input_feats.max(), gt_output_feats.max(),
-               diff.max())
-    X = 512
-    Y = 300
-    images = []
-    plt.figure(figsize=(30, 30))
-    f, axarr = plt.subplots(2, 2)
-    images.append(axarr[0, 1].imshow(text_feats[:Y, :X], vmin=_min, vmax=_max))
-    plt.colorbar(images[0], ax=axarr[0, 1])
-    axarr[0, 1].set_title('Original image')
-    images.append(axarr[1, 0].imshow(pred_output_ft[:Y, :X], vmin=_min, vmax=_max))
-    plt.colorbar(images[1], ax=axarr[1, 0])
-    axarr[1, 0].set_title('Predicted features')
-    images.append(axarr[1, 1].imshow(gt_output_feats[:Y, :X], vmin=_min, vmax=_max))
-    plt.colorbar(images[2], ax=axarr[1, 1])
-    axarr[1, 1].set_title('Reverse mapping from \n reverse mapping')
-    images.append(axarr[0, 0].imshow(diff[:Y, :X], vmin=_min, vmax=_max))
-    plt.colorbar(images[3], ax=axarr[0, 0])
-    axarr[0, 0].set_title('Difference between reverse \n mapping and prediction')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='jpeg')
-    buf.seek(0)
-    return buf
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
@@ -82,8 +41,9 @@ if __name__ == "__main__":
     parser.add_argument('--loss_type', default='GT', type=str, help='GT or R')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, help='kernel type')
+    parser.add_argument('--print_every', type=int, default=20, help='kernel type')
     parser.add_argument('--exp_info', type=str)
-    parser.add_argument('--blur', type=str)
+    parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
 
     args = parser.parse_args()
     
@@ -103,28 +63,31 @@ if __name__ == "__main__":
 
     # Tensorboard summary writer
     exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_{args.exp_info}_try_{args.try_num}"
-    # exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_noSigmoid_weightdecay_{weight_decay}_h1_{hidden_size1}_h2_{hidden_size2}_lr_{lr}_batchsize_{batch_size}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
 
     if th.cuda.is_available():
         device = 'cuda:0'
     else:
         device = 'cpu:0'
+
     # Get feats
     image_feats = np.load(f"data/{args.movie}/image_features.npy")
     text_feats = np.load(f"data/{args.movie}/text_features.npy")
 
-
-    if blur:
+    # Transform to tensors and blur (optional)
+    if blur and direction == 'm2b':
         kernel = np.array([[1, 4, 6, 4, 1]])/16
         text_feats = signal.convolve2d(text_feats.T, kernel, mode='valid', boundary='wrap')
         text_feats = th.FloatTensor(text_feats)
-    else:
+        image_feats = th.FloatTensor(image_feats).T
+    elif blur and direction == 'b2m':
         text_feats = th.FloatTensor(text_feats).T
-
-        # Transform to tensors
-    image_feats = th.FloatTensor(image_feats).T # shape (512, Nm)
-    # text_feats = th.FloatTensor(text_feats).T # shape (512, Nb)
+        kernel = np.array([[1, 4, 6, 4, 1]])/16
+        image_feats = signal.convolve2d(image_feats.T, kernel, mode='valid', boundary='wrap')
+        image_feats = th.FloatTensor(image_feats)
+    else:
+        image_feats = th.FloatTensor(image_feats).T  # shape (512, Nm)
+        text_feats = th.FloatTensor(text_feats).T # shape (512, Nb)
     
     # Normalize
     image_feats /= image_feats.norm(dim=0, keepdim=True)
@@ -164,10 +127,10 @@ if __name__ == "__main__":
     
     # Get toy input feats: output_feats -> toy_input_feats
     # we need the reverse mapping input -> output
-    toy_input_feats = reverse_mapping(output_feats, f_times, kernel_type, device).to(device)
+    toy_input_feats = reverse_mapping(output_feats, f_times, kernel_type).to(device)
 
     # from toy_input_feats to gt_output_feats (input -> output)
-    gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type, device).to(device)
+    gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type).to(device)
 
     # Create times dataset and dataloader
     dataset = TimesDataset(output_times_scaled)
@@ -176,7 +139,7 @@ if __name__ == "__main__":
     
     # Define model
     model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
-    model= model.to(device)    
+    model = model.to(device)
     # Define loss function
     loss_reconstruction = ReconstructionLoss()
     loss_cosine = CosineDistanceLoss()
@@ -186,12 +149,11 @@ if __name__ == "__main__":
     optimizer = th.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     # Begin training
-    #losses = th.Tensor(size = (num_epochs,2))
     start_time = time.time()
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while epoch < 500: #abs(loss_prev - loss_now) > 1e-10:
+    while abs(loss_prev - loss_now) > 1e-10:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
@@ -211,10 +173,11 @@ if __name__ == "__main__":
         pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
 
         # do inverse warping
-        pred_output_feats = reverse_mapping(toy_input_feats, pred_invf_times, kernel_type, device).to(device)
+        pred_output_feats = reverse_mapping(toy_input_feats, pred_invf_times, kernel_type).to(device)
 
         # Compute reconstruction loss
         lossR = loss_reconstruction(output_feats, pred_output_feats.to(device))
+
         #lossCD = loss_cosine(output_feats, pred_output_feats)
         lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
 
@@ -227,6 +190,7 @@ if __name__ == "__main__":
         # Backpropagate and update losses
         loss_prev = loss_now
         optimizer.zero_grad()
+
         if loss_now > loss_prev:
             lr *= 0.1
         if loss_type == "GT":
@@ -248,37 +212,25 @@ if __name__ == "__main__":
         #losses[epoch][1] = lossGT.detach()
         
         # Only every 5 epochs, visualize images and mapping
-        if epoch%5 == 0:
+        if epoch % args.print_every == 0:
             # Define movie time segment to visualize
             i_len = 0
             ii_len = 100
             o_len = int(np.ceil(i_len/len_input*len_output))
             oo_len = int(np.ceil(ii_len/len_input*len_output))
 
-            # Define feature segment to visualize
-            f_len = 100
-            # # Visualize movie
-            #
-            #
-            # # Visualize predicted output feats
-            # writer.add_image(f"Pred output feats {o_len}:{oo_len}", pred_output_feats[:f_len, o_len:oo_len], epoch, dataformats='HW')
-            #
-            # # Visualize difference of pred output feats and output feats
-            # diff_pred_output_feats = pred_output_feats[:f_len, o_len:oo_len] - output_feats[:f_len, o_len:oo_len]
-            # writer.add_image(f"Pred difference {o_len}:{oo_len}", diff_pred_output_feats, epoch, dataformats='HW')
+            if epoch == 0:
+                # Visualize input and output
+                visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy(), writer)
             
             
             # Visualize mapping
-            pred_invf_times_copy = pred_invf_times.clone().detach()
-            plot_buf = get_plot(output_times.cpu(), pred_invf_times_copy.cpu(), invf_times.cpu())
-            plot_buf_img = plot_diff(text_feats.data.numpy(), pred_output_feats.data.numpy(), gt_output_feats.data.numpy())
-            
-            image, vis = PIL.Image.open(plot_buf), PIL.Image.open(plot_buf_img)
-            image, vis = ToTensor()(image), ToTensor()(vis)
-            writer.add_image('Mapping', image, epoch)
-            writer.add_image('Visualization', vis, epoch)
-            plot_buf.close()
-            plot_buf_img.close()
+            get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu(), writer, epoch)
+            plot_diff(text_feats.cpu().data.numpy(),
+                                     pred_output_feats.cpu().data.numpy(),
+                                     gt_output_feats.cpu().data.numpy(), writer, epoch)
+
+
         
         
         epoch += 1
