@@ -67,7 +67,7 @@ if __name__ == "__main__":
     # Tensorboard summary writer
     exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_{args.exp_info}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
-    wandb.init(project="dynamic-model", entity="the-dream-team")
+    wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
 
