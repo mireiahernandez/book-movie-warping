@@ -39,7 +39,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
-    parser.add_argument('--loss_type', default='GT', type=str, help='GT or R')
+    # parser.add_argument('--loss_type', default='GT', type=str, help='GT or R')
+    parser.add_argument('--gt_loss', type=float, help='weighting of gt loss')
+    parser.add_argument('--rec_loss', type=float, help='weighting of rec loss')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, help='kernel type')
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
@@ -206,15 +208,19 @@ if __name__ == "__main__":
 
         if loss_now > loss_prev:
             lr *= 0.1
-        if loss_type == "GT":
-            lossGT.backward()
-            loss_now = lossGT
-        elif loss_type == 'R':
-            lossR.backward()
-            loss_now = lossR
-        else:
-            lossCD.backward()
-            loss_now = lossCD
+        # if loss_type == "GT":
+        #     lossGT.backward()
+        #     loss_now = lossGT
+        # elif loss_type == 'R':
+        #     lossR.backward()
+        #     loss_now = lossR
+        # else:
+        #     lossCD.backward()
+        #     loss_now = lossCD
+        loss_ = args.gt_loss * lossGT + args.rec_loss + lossR
+        loss_.backward()
+        loss_now = loss_
+
 
         # Optimizer step
         optimizer.step()
