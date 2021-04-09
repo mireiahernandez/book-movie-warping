@@ -4,23 +4,25 @@ import io
 
 import PIL.Image
 from torchvision.transforms import ToTensor
+import wandb
 
 
-def get_plot(input_times, output_times, gt_times, writer, epoch):
+def get_plot(input_times, output_times, gt_times):
     plt.close()
     plt.plot(input_times, output_times, 'r-')
     plt.plot(input_times, gt_times, 'g-')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='jpeg')
-    buf.seek(0)
-    image = PIL.Image.open(buf)
-    image = ToTensor()(image)
-    writer.add_image('Mapping', image, epoch)
-    buf.close()
+    wandb.log({'Mapping': plt})
+    # buf = io.BytesIO()
+    # plt.savefig(buf, format='jpeg')
+    # buf.seek(0)
+    # image = PIL.Image.open(buf)
+    # image = ToTensor()(image)
+    # writer.add_image('Mapping', image, epoch)
+    # buf.close()
 
 
 
-def plot_diff(text_feats, pred_output_ft, gt_output_feats, writer, epoch):
+def plot_diff(text_feats, pred_output_ft, gt_output_feats):
     plt.close()
     diff = pred_output_ft - gt_output_feats
     _min = min(text_feats.min(), pred_output_ft.min(), gt_output_feats.min(),
@@ -44,16 +46,16 @@ def plot_diff(text_feats, pred_output_ft, gt_output_feats, writer, epoch):
     images.append(axarr[0, 0].imshow(diff[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[3], ax=axarr[0, 0])
     axarr[0, 0].set_title('Difference between reverse \n mapping and prediction')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='jpeg')
-    buf.seek(0)
-    image = PIL.Image.open(buf)
-    image = ToTensor()(image)
-    writer.add_image('Training Visualization', image, epoch)
-    buf.close()
+    # buf = io.BytesIO()
+    # plt.savefig(buf, format='jpeg')
+    # buf.seek(0)
+    # image = PIL.Image.open(buf)
+    # image = ToTensor()(image)
+    # writer.add_image('Training Visualization', image, epoch)
+    # buf.close()
 
 
-def visualize_input(input, output, writer):
+def visualize_input(input, output):
     plt.close()
     _min = min(input.min(), output.min())
     _max = max(input.max(), output.max())
@@ -67,10 +69,10 @@ def visualize_input(input, output, writer):
     images.append(axarr[1].imshow(output[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[1], ax=axarr[1])
     axarr[1].set_title('Output features')
-    buf = io.BytesIO()
-    plt.savefig(buf, format='jpeg')
-    buf.seek(0)
-    image = PIL.Image.open(buf)
-    image = ToTensor()(image)
-    writer.add_image('Input Visualization', image, 0)
-    buf.close()
+    # buf = io.BytesIO()
+    # plt.savefig(buf, format='jpeg')
+    # buf.seek(0)
+    # image = PIL.Image.open(buf)
+    # image = ToTensor()(image)
+    # writer.add_image('Input Visualization', image, 0)
+    # buf.close()
