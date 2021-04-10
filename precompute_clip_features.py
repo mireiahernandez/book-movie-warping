@@ -18,7 +18,7 @@ def getBookName(filen):
 dataset_path = '/data/vision/torralba/datasets/movies/data/'
 bksnmvs_path = '/data/vision/torralba/frames/data_acquisition/booksmovies/data/booksandmovies/'
 anno_path = '{}/antonio/annotation/'.format(bksnmvs_path)
-frames_by_number_path = '/data/vision/torralba/datasets/movies/data/frames_by_number'
+frames_path = '/data/vision/torralba/movies-books/booksandmovies/frames/'
 
 
 movies = ['American.Psycho','Brokeback.Mountain','Fight.Club','Gone.Girl','Harry.Potter.and.the.Sorcerers.Stone','No.Country.for.Old.Men','One.Flew.Over.the.Cuckoo.Nest','Shawshank.Redemption','The.Firm','The.Green.Mile','The.Road']
@@ -33,22 +33,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--movie', type=str, help='movie name')
     args = parser.parse_args()
+    movie = args.movie
     
     # Get book sentences
-    book_name = getBookName(args.movie)
+    book_name = getBookName(movie)
     book_file = scipy.io.loadmat(book_name)
     book_sentences = book_file['book']['sentences'].item()['sentence']
     book_sentences = [sent[0][0] for sent in book_sentences]
 
-    # Get movie frames
-    frames_path = f"{frames_by_number_path}/{args.movie.replace('.', '_')}/*"
-    frames_dirs = sorted(glob.glob(frames_path))
-    frames_files = []
-    for frames_dir in frames_dirs:
-        frames_files.extend(sorted(glob.glob(frames_dir + '/*')))
-    
+    # Get frame files
+    frame_files = sorted(glob.glob(frames_path + movie + '/*.jpg'))
+    fr = 2
+   
     # Get book "image" through CLIP text encoder    
-    image_features = clip_image_encoder(frames_files[::10])
+    image_features = clip_image_encoder(frame_files)
     image_features = np.array(image_features)
     np.save(f"data/{args.movie}/image_features.npy", image_features)
     print(f"Image features saved at: data/{args.movie}/image_features.npy")
