@@ -39,7 +39,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
-    # parser.add_argument('--loss_type', default='GT', type=str, help='GT or R')
     parser.add_argument('--gt_loss', type=float, help='weighting of gt loss')
     parser.add_argument('--rec_loss', type=float, help='weighting of rec loss')
     parser.add_argument('--try_num', type=str, help='try number')
@@ -62,12 +61,11 @@ if __name__ == "__main__":
     weight_decay = 1e-4
     batch_size = 512
     direction = args.direction
-    loss_type = args.loss_type
     kernel_type = args.kernel_type
     blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{loss_type}_{args.exp_info}_try_{args.try_num}"
+    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
@@ -165,7 +163,7 @@ if __name__ == "__main__":
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while abs(loss_prev - loss_now) > 1e-10:
+    while abs(loss_prev - loss_now) > 1e-10 and epoch<500:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
