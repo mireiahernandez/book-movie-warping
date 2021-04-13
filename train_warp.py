@@ -35,8 +35,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone_GT', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
-    parser.add_argument('--gt_loss', type=float, help='weighting of gt loss')
-    parser.add_argument('--rec_loss', type=float, help='weighting of rec loss')
+    parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
+    parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
+    parser.add_argument('--clip_loss', default=0.0, type=float, help='weighting of clip loss')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, help='kernel type')
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
@@ -203,7 +204,7 @@ if __name__ == "__main__":
         if loss_now > loss_prev:
             lr *= 0.1
 
-        loss_ = args.gt_loss * lossGT + args.rec_loss + lossR
+        loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.clip_loss + lossCLIP
         loss_.backward()
         loss_now = loss_
 

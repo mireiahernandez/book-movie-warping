@@ -46,6 +46,8 @@ if __name__ == "__main__":
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
     parser.add_argument('--exp_info', type=str)
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
+    parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
+    parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
 
     args = parser.parse_args()
 
@@ -53,8 +55,8 @@ if __name__ == "__main__":
 
     # Define parameters
     input_size = 1
-    hidden_size1 = 64
-    hidden_size2 = 32
+    hidden_size1 = args.h1
+    hidden_size2 = args.h2
     output_size = 1
     num_epochs = 100000
     lr = 1e-4
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}"
+    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_h1h2{args.h1}_{args.h2}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
@@ -215,7 +217,7 @@ if __name__ == "__main__":
         # else:
         #     lossCD.backward()
         #     loss_now = lossCD
-        loss_ = args.gt_loss * lossGT + args.rec_loss + lossR
+        loss_ = args.gt_loss * lossGT + args.rec_loss * lossR
         loss_.backward()
         loss_now = loss_
 
@@ -223,23 +225,13 @@ if __name__ == "__main__":
         # Optimizer step
         optimizer.step()
         print(f"Epoch {epoch} loss: {lossGT}")
-        
-        # Save losses
-        #losses[epoch][0] = lossR.detach()
-        #losses[epoch][1] = lossGT.detach()
+
         
         # Only every 5 epochs, visualize images and mapping
         if epoch % args.print_every == 0:
-            # Define movie time segment to visualize
-            i_len = 0
-            ii_len = 100
-            o_len = int(np.ceil(i_len/len_input*len_output))
-            oo_len = int(np.ceil(ii_len/len_input*len_output))
-
             if epoch == 0:
                 # Visualize input and output
                 visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
-            
             
             # Visualize mapping
             get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu())
