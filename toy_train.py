@@ -46,15 +46,16 @@ if __name__ == "__main__":
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
     parser.add_argument('--exp_info', type=str)
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
-
+    parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
+    parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
     args = parser.parse_args()
 
 
 
     # Define parameters
     input_size = 1
-    hidden_size1 = 64
-    hidden_size2 = 32
+    hidden_size1 = args.h1
+    hidden_size2 = args.h2
     output_size = 1
     num_epochs = 100000
     lr = 1e-4
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}"
+    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_h1h2{args.h1}_{args.h2}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
@@ -113,7 +114,7 @@ if __name__ == "__main__":
     else: 
         input_feats = text_feats
         len_input = len_text
-        output_feats = image_feats
+        output_feats = image_feats.to(device)
         len_output = len_image
 
     # Get input and output times
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while abs(loss_prev - loss_now) > 1e-10 and epoch<500:
+    while epoch < 500 : #abs(loss_prev - loss_now) > 1e-10 and epoch<500:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)

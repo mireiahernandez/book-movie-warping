@@ -12,8 +12,10 @@ class ReconstructionLoss(nn.Module):
         super().__init__()
 
     def forward(self, feats, warped_feats):
-        norm = th.norm(feats - warped_feats, dim=0)
-        return norm.mean()
+#        norm = th.norm(feats - warped_feats, dim=0)
+#        return norm.mean()
+        return th.nn.functional.l1_loss(feats, warped_feats)
+#        return th.nn.functional.mse_loss(feats, warped_feats)
 
 class CosineDistanceLoss(nn.Module):
     def __init__(self):
