@@ -61,7 +61,7 @@ if __name__ == "__main__":
     blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"train_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_h1h2{args.h1}_{args.h2}"
+    exp_name = f"REAL_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_h1h2{args.h1}_{args.h2}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
@@ -195,7 +195,8 @@ if __name__ == "__main__":
         # Write to wandb
         wandb.log({'epoch': epoch,
                    'reconstruction_loss': lossR,
-                   'ground_truth_loss': lossGT})
+                   'ground_truth_loss': lossGT,
+                   'clip_loss': lossCLIP})
                
         # Backpropagate and update losses
         loss_prev = loss_now
