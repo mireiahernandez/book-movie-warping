@@ -216,7 +216,7 @@ if __name__ == "__main__":
         # else:
         #     lossCD.backward()
         #     loss_now = lossCD
-        loss_ = args.gt_loss * lossGT + args.rec_loss + lossR
+        loss_ = args.gt_loss * lossGT + args.rec_loss * lossR
         loss_.backward()
         loss_now = loss_
 
@@ -224,23 +224,13 @@ if __name__ == "__main__":
         # Optimizer step
         optimizer.step()
         print(f"Epoch {epoch} loss: {lossGT}")
-        
-        # Save losses
-        #losses[epoch][0] = lossR.detach()
-        #losses[epoch][1] = lossGT.detach()
+
         
         # Only every 5 epochs, visualize images and mapping
         if epoch % args.print_every == 0:
-            # Define movie time segment to visualize
-            i_len = 0
-            ii_len = 100
-            o_len = int(np.ceil(i_len/len_input*len_output))
-            oo_len = int(np.ceil(ii_len/len_input*len_output))
-
             if epoch == 0:
                 # Visualize input and output
                 visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
-            
             
             # Visualize mapping
             get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu())
