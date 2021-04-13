@@ -168,6 +168,7 @@ if __name__ == "__main__":
         for i, batch in enumerate(tqdm(dataloader)):
             batch, idx = batch
             batch, idx = batch.to(device), idx.to(device)
+
             invf_output = model.forward(batch.unsqueeze(1))
             pred_invf_times_scaled.append(invf_output)
             index.append(idx)
@@ -187,7 +188,10 @@ if __name__ == "__main__":
         lossR = loss_reconstruction(output_feats, pred_output_feats.to(device))
 
         # Get the GT mapping TODO
-        lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
+        # input are the predicted coordinates in movie where they should match to book,
+        # output are matching coordinates in the book
+        lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
+        # lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
 
         # Get CLIP loss
         lossCLIP = loss_clip(pred_output_feats[:, gt_dict[0]], input_feats[:, gt_dict[1]])
@@ -225,7 +229,7 @@ if __name__ == "__main__":
             get_plot(output_times.cpu(), pred_invf_times.detach().cpu(), invf_times.cpu())
             plot_diff(input_feats.cpu().data.numpy(),
                       pred_output_feats.cpu().data.numpy(),
-                      output_feats.cpu().data.numpy())
+                      output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
 
         epoch += 1
     

@@ -22,30 +22,35 @@ def get_plot(input_times, output_times, gt_times):
 
 
 
-def plot_diff(text_feats, pred_output_ft, gt_output_feats):
+def plot_diff(input, prediction, output,
+              titles=None):
+    if titles is None:
+        titles = ['Original image', 'Predicted features',
+                  'Reverse mapping from \n reverse mapping',
+                  'Difference between reverse \n mapping and prediction']
     plt.close()
-    diff = pred_output_ft - gt_output_feats
-    _min = min(text_feats.min(), pred_output_ft.min(), gt_output_feats.min(),
+    diff = prediction - output
+    _min = min(input.min(), prediction.min(), output.min(),
                diff.min())
-    _max = max(text_feats.max(), pred_output_ft.max(), gt_output_feats.max(),
+    _max = max(input.max(), prediction.max(), output.max(),
                diff.max())
     X = 512
     Y = 300
     images = []
     plt.figure(figsize=(30, 30))
     f, axarr = plt.subplots(2, 2)
-    images.append(axarr[0, 1].imshow(text_feats[:Y, :X], vmin=_min, vmax=_max))
+    images.append(axarr[0, 1].imshow(input[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[0], ax=axarr[0, 1])
-    axarr[0, 1].set_title('Original image')
-    images.append(axarr[1, 0].imshow(pred_output_ft[:Y, :X], vmin=_min, vmax=_max))
+    axarr[0, 1].set_title(titles[0])
+    images.append(axarr[1, 0].imshow(prediction[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[1], ax=axarr[1, 0])
-    axarr[1, 0].set_title('Predicted features')
-    images.append(axarr[1, 1].imshow(gt_output_feats[:Y, :X], vmin=_min, vmax=_max))
+    axarr[1, 0].set_title(titles[1])
+    images.append(axarr[1, 1].imshow(output[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[2], ax=axarr[1, 1])
-    axarr[1, 1].set_title('Reverse mapping from \n reverse mapping')
+    axarr[1, 1].set_title(titles[2])
     images.append(axarr[0, 0].imshow(diff[:Y, :X], vmin=_min, vmax=_max))
     plt.colorbar(images[3], ax=axarr[0, 0])
-    axarr[0, 0].set_title('Difference between reverse \n mapping and prediction')
+    axarr[0, 0].set_title(titles[3])
     wandb.log({'Warping Visualization': plt})
     # buf = io.BytesIO()
     # plt.savefig(buf, format='jpeg')
