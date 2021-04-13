@@ -9,8 +9,6 @@ class ReconstructionLoss(nn.Module):
         super().__init__()
 
     def forward(self, feats, warped_feats):
-        # norm = th.norm(feats - warped_feats, dim=0)
-        # return norm.mean()
         return th.nn.functional.l1_loss(feats, warped_feats)
 
 class CosineDistanceLoss(nn.Module):
@@ -23,16 +21,17 @@ class CosineDistanceLoss(nn.Module):
     scores is optimized.
     Here, we take the ALIGNED pairs, using the ground truth book and movie alignments.
     '''
-    def __init__(self):
+    def __init__(self, device='cpu:0'):
         super().__init__()
         # from trained CLIP model
         self.temperature = 100
+        self.device = device
 
     def forward(self, feats, warped_feats):
         logits1 = self.temperature * feats.T @ warped_feats
         logits2 = self.temperature * warped_feats.T @ feats
         # symmetric loss function
-        labels = th.LongTensor(np.arange(feats.shape[1]))
+        labels = th.LongTensor(np.arange(feats.shape[1])).to(self.device)
         loss_i = th.nn.functional.cross_entropy(logits1, labels)
         loss_t = th.nn.functional.cross_entropy(logits2, labels)
         loss = (loss_i + loss_t) / 2

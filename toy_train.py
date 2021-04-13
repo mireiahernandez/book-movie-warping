@@ -48,7 +48,6 @@ if __name__ == "__main__":
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
     parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
     parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
-
     args = parser.parse_args()
 
 
@@ -115,7 +114,7 @@ if __name__ == "__main__":
     else: 
         input_feats = text_feats
         len_input = len_text
-        output_feats = image_feats
+        output_feats = image_feats.to(device)
         len_output = len_image
 
     # Get input and output times
@@ -165,7 +164,7 @@ if __name__ == "__main__":
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while abs(loss_prev - loss_now) > 1e-10 and epoch<500:
+    while epoch < 500 : #abs(loss_prev - loss_now) > 1e-10 and epoch<500:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
