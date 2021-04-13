@@ -207,7 +207,8 @@ if __name__ == "__main__":
         wandb.log({'epoch': epoch,
                    'reconstruction_loss': lossR,
                    'ground_truth_loss': lossGT,
-                   'clip_loss': lossCLIP})
+                   'clip_loss': lossCLIP,
+                   'selfsupervised_loss': lossSS})
                
         # Backpropagate and update losses
         loss_prev = loss_now
