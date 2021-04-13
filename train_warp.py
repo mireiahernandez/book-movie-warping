@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     # Define loss function
     loss_reconstruction = ReconstructionLoss()
-    loss_clip = CosineDistanceLoss()
+    loss_clip = CosineDistanceLoss(device=device)
     loss_gt = GTDifLoss()
 
     # Define optimizer
