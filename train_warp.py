@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
     parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
     parser.add_argument('--clip_loss', default=0.0, type=float, help='weighting of clip loss')
+    parser.add_argument('--ss_loss', default=0.0, type=float, help='weighting of self supervised clip loss')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, help='kernel type')
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
@@ -190,11 +191,17 @@ if __name__ == "__main__":
         # Get the GT mapping TODO
         # input are the predicted coordinates in movie where they should match to book,
         # output are matching coordinates in the book
-        lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
+        if args.direction == 'm2b':
+            lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
+        else:
+            lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[1]], th.LongTensor(gt_dict[0]).to(device))
         # lossGT = loss_gt(pred_invf_times_scaled, invf_times.to(device) / (len_input - 1))
 
         # Get CLIP loss
         lossCLIP = loss_clip(pred_output_feats[:, gt_dict[0]], input_feats[:, gt_dict[1]])
+
+        # Self-supervised loss
+        lossSS = loss_clip(pred_output_feats, output_feats)
 
         # Write to wandb
         wandb.log({'epoch': epoch,
@@ -209,7 +216,7 @@ if __name__ == "__main__":
         if loss_now > loss_prev:
             lr *= 0.1
 
-        loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.clip_loss + lossCLIP
+        loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.clip_loss * lossCLIP + args.ss_loss * lossSS
         loss_.backward()
         loss_now = loss_
 

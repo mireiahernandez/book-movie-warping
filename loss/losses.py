@@ -11,6 +11,9 @@ class ReconstructionLoss(nn.Module):
     def forward(self, feats, warped_feats):
         return th.nn.functional.l1_loss(feats, warped_feats)
 
+
+
+
 class CosineDistanceLoss(nn.Module):
     '''
     The original loss maximized the cosine similarity of the
