@@ -16,6 +16,7 @@ from loss.losses import ReconstructionLoss, CosineDistanceLoss
 from loss.losses import GTDifLoss, GTNormLoss
 from utils import get_plot, plot_diff, visualize_input
 import json
+from skimage.transform import resize
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -76,9 +77,19 @@ if __name__ == "__main__":
     # Get feats
     image_feats = np.load(f"data/{args.movie}/image_features.npy")
     text_feats = np.load(f"data/{args.movie}/text_features.npy")
+
+    # Start Coarse
+    image_feats = np.asarray(image_feats, dtype=np.float64)
+    text_feats = np.asarray(text_feats, dtype=np.float64)
+    org_dim_image, org_dim_text = image_feats.shape[0], text_feats.shape[0]
+    min_factor = min(org_dim_image, org_dim_text)//512
+    image_feats = resize(image_feats, (image_feats.shape[0]//min_factor, 512), anti_aliasing=True, preserve_range=True)
+    text_feats = resize(text_feats, (text_feats.shape[0]//min_factor, 512), anti_aliasing=True, preserve_range=True)
+
     gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
     gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
-
+    gt_dict[0] = gt_dict[0]//min_factor
+    gt_dict[1] = gt_dict[1] // min_factor
     # Transform to tensors and blur (optional)
     if blur and direction == 'm2b':
         kernel = np.array([[1, 4, 6, 4, 1]])/16
@@ -145,6 +156,9 @@ if __name__ == "__main__":
     # Define model
     model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
+    # model.load_state_dict(th.load(
+    #     'outputs/Harry.Potter.and.the.Sorcerers.Stone/REAL_m2b_kernel_linear_loss_1gt_1e-3_try_4_lr0.001_h1h2_64_32_model.pt',
+    # map_location=th.device('cpu')))
 
     # Log model training
     wandb.watch(model, log="all")
@@ -238,8 +252,91 @@ if __name__ == "__main__":
             plot_diff(input_feats.cpu().data.numpy(),
                       pred_output_feats.cpu().data.numpy(),
                       output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
-
         epoch += 1
+        if epoch % 5 == 0:
+            print('CHANGE')
+            # Get feats
+            image_feats = np.load(f"data/{args.movie}/image_features.npy")
+            text_feats = np.load(f"data/{args.movie}/text_features.npy")
+            gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
+            gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
+
+            # Start Coarse
+            image_feats = np.asarray(image_feats, dtype=np.float64)
+            text_feats = np.asarray(text_feats, dtype=np.float64)
+            if min_factor * 2 * image_feats.shape[0] > org_dim_image or min_factor * 2 * text_feats.shape[0] > org_dim_text:
+                image_feats = resize(image_feats, (org_dim_image, 512), anti_aliasing=True, preserve_range=True)
+                text_feats = resize(text_feats, (org_dim_text, 512), anti_aliasing=True, preserve_range=True)
+
+            else:
+                min_factor *= 2
+                image_feats = resize(image_feats, (org_dim_image//min_factor, 512), anti_aliasing=True, preserve_range=True)
+                text_feats = resize(text_feats, (org_dim_text//min_factor, 512), anti_aliasing=True, preserve_range=True)
+                gt_dict[0] = gt_dict[0] // min_factor
+                gt_dict[0] = gt_dict[0] // min_factor
+            # # Transform to tensors and blur (optional)
+            # if blur and direction == 'm2b':
+            #     kernel = np.array([[1, 4, 6, 4, 1]]) / 16
+            #     text_feats = signal.convolve2d(text_feats.T, kernel, mode='valid', boundary='wrap')
+            #     text_feats = th.FloatTensor(text_feats)
+            #     image_feats = th.FloatTensor(image_feats).T
+            # elif blur and direction == 'b2m':
+            #     text_feats = th.FloatTensor(text_feats).T
+            #     kernel = np.array([[1, 4, 6, 4, 1]]) / 16
+            #     image_feats = signal.convolve2d(image_feats.T, kernel, mode='valid', boundary='wrap')
+            #     image_feats = th.FloatTensor(image_feats)
+            # else:
+            image_feats = th.FloatTensor(image_feats.copy()).T  # shape (512, Nm)
+            text_feats = th.FloatTensor(text_feats.copy()).T  # shape (512, Nb)
+
+            # Normalize
+            image_feats /= image_feats.norm(dim=0, keepdim=True)
+            text_feats /= text_feats.norm(dim=0, keepdim=True)
+
+            # Get lens
+            len_text = text_feats.shape[1]
+            len_image = image_feats.shape[1]
+
+            # Define input feats
+
+            if direction == 'm2b':
+                input_feats = image_feats
+                len_input = len_image
+                output_feats = text_feats.to(device)
+                len_output = len_text
+            else:
+                input_feats = text_feats
+                len_input = len_text
+                output_feats = image_feats.to(device)
+                len_output = len_image
+
+            # Get input and output times
+            input_times = th.FloatTensor(np.arange(len_input)).to(device)
+            output_times = th.FloatTensor(np.arange(len_output)).to(device)
+            # Scale input and output times to [0,1]
+            input_times_scaled = input_times / (len_input - 1)
+            output_times_scaled = output_times / (len_output - 1)
+            # Get f times: from input -> output (shape Ni)
+            f_times = input_times * (len_output - 1) / (len_input - 1)
+            f_times = f_times.to(device)
+            # Get invf times: from output -> input (shape No)
+            invf_times = output_times * (len_input - 1) / (len_output - 1)
+            invf_times = invf_times.to(device)
+            # Get toy input feats: output_feats -> toy_input_feats
+            # we need the reverse mapping input -> output
+            toy_input_feats = reverse_mapping(output_feats, f_times, kernel_type).to(device)
+            # from toy_input_feats to gt_output_feats (input -> output)
+            gt_output_feats = reverse_mapping(toy_input_feats, invf_times, kernel_type).to(device)
+            # Create times dataset and dataloader
+            dataset = TimesDataset(output_times_scaled)
+            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)  # , sampler=None,
+            # batch_sampler=None, num_workers=1, collate_fn=None)
+            visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
+            lr *= 0.9
+            args.gt_loss = 0
+            args.rec_loss = 1
+
+
     
     end_time = time.time()
 
