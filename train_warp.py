@@ -41,13 +41,14 @@ if __name__ == "__main__":
     parser.add_argument('--clip_loss', default=0.0, type=float, help='weighting of clip loss')
     parser.add_argument('--ss_loss', default=0.0, type=float, help='weighting of self supervised clip loss')
     parser.add_argument('--try_num', type=str, help='try number')
-    parser.add_argument('--kernel_type', type=str, help='kernel type')
+    parser.add_argument('--kernel_type', type=str, default='linear', help='kernel type')
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
     parser.add_argument('--exp_info', type=str)
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
     parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
     parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--cuda', type=int, default=0)
     args = parser.parse_args()
     # Define parameters
     input_size = 1
@@ -70,7 +71,7 @@ if __name__ == "__main__":
     wandb.config.update(args)
 
     if th.cuda.is_available():
-        device = 'cuda:2'
+        device = 'cuda:{}'.format(args.cuda)
     else:
         device = 'cpu:0'
 
@@ -222,7 +223,9 @@ if __name__ == "__main__":
                    'reconstruction_loss': lossR,
                    'ground_truth_loss': lossGT,
                    'clip_loss': lossCLIP,
-                   'selfsupervised_loss': lossSS})
+                   'selfsupervised_loss': lossSS,
+                   'lambda_gt': args.gt_loss, 'lambda_rec': args.rec_loss,
+                   'lambda_clip': args.clip_loss, 'lambda_ss': args.ss_loss})
                
         # Backpropagate and update losses
         loss_prev = loss_now
@@ -300,12 +303,12 @@ if __name__ == "__main__":
             # Define input feats
 
             if direction == 'm2b':
-                input_feats = image_feats
+                input_feats = image_feats.to(device)
                 len_input = len_image
                 output_feats = text_feats.to(device)
                 len_output = len_text
             else:
-                input_feats = text_feats
+                input_feats = text_feats.to(device)
                 len_input = len_text
                 output_feats = image_feats.to(device)
                 len_output = len_image
@@ -334,7 +337,7 @@ if __name__ == "__main__":
             visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
             lr *= 0.9
             args.gt_loss = 0
-            args.rec_loss = 1
+            args.ss_loss = 1
 
 
     
