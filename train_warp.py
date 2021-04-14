@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument('--blur', default='n', type=str, help='y for blur else not using blur')
     parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
     parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
-
+    parser.add_argument('--lr', type=float, default=1e-4)
     args = parser.parse_args()
     # Define parameters
     input_size = 1
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     hidden_size2 = args.h2
     output_size = 1
     num_epochs = 100000
-    lr = 1e-4
+    lr = args.lr
     weight_decay = 1e-4
     batch_size = 512
     direction = args.direction
@@ -62,14 +62,14 @@ if __name__ == "__main__":
     blur = True if args.blur == 'y' else False
 
     # Tensorboard summary writer
-    exp_name = f"REAL_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_h1h2{args.h1}_{args.h2}"
+    exp_name = f"REAL_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_lr{args.lr}_h1h2_{args.h1}_{args.h2}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
 
     if th.cuda.is_available():
-        device = 'cuda:0'
+        device = 'cuda:2'
     else:
         device = 'cpu:0'
 

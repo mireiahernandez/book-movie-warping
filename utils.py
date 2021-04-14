@@ -34,8 +34,8 @@ def plot_diff(input, prediction, output,
                diff.min())
     _max = max(input.max(), prediction.max(), output.max(),
                diff.max())
-    X = 512
-    Y = 300
+    X = -1 #512
+    Y = -1 #300
     images = []
     plt.figure(figsize=(30, 30))
     f, axarr = plt.subplots(2, 2)
@@ -65,7 +65,7 @@ def visualize_input(input, output):
     plt.close()
     _min = min(input.min(), output.min())
     _max = max(input.max(), output.max())
-    X, Y = 512, 300
+    X, Y = -1, -1 #512, 300
     images = []
     plt.figure(figsize=(30, 30))
     f, axarr = plt.subplots(1, 2)
