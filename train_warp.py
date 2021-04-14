@@ -267,12 +267,12 @@ if __name__ == "__main__":
             # Start Coarse
             image_feats = np.asarray(image_feats, dtype=np.float64)
             text_feats = np.asarray(text_feats, dtype=np.float64)
-            if min_factor * 2 * image_feats.shape[0] > org_dim_image or min_factor * 2 * text_feats.shape[0] > org_dim_text:
+            if image_feats.shape[0]//(min_factor//2) > org_dim_image or text_feats.shape[0]//(min_factor//2) > org_dim_text:
                 image_feats = resize(image_feats, (org_dim_image, 512), anti_aliasing=True, preserve_range=True)
                 text_feats = resize(text_feats, (org_dim_text, 512), anti_aliasing=True, preserve_range=True)
 
             else:
-                min_factor *= 2
+                min_factor /= 2
                 image_feats = resize(image_feats, (org_dim_image//min_factor, 512), anti_aliasing=True, preserve_range=True)
                 text_feats = resize(text_feats, (org_dim_text//min_factor, 512), anti_aliasing=True, preserve_range=True)
                 gt_dict[0] = gt_dict[0] // min_factor
