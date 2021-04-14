@@ -176,7 +176,7 @@ if __name__ == "__main__":
     loss_prev = 0
     loss_now = 1000
     epoch = 0
-    while epoch < 500:
+    while epoch < 50000:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
@@ -253,7 +253,7 @@ if __name__ == "__main__":
                       pred_output_feats.cpu().data.numpy(),
                       output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
         epoch += 1
-        if epoch % 5 == 0:
+        if epoch % 500 == 0:
             print('CHANGE')
             # Get feats
             image_feats = np.load(f"data/{args.movie}/image_features.npy")
