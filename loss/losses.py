@@ -12,38 +12,39 @@ class ReconstructionLoss(nn.Module):
         return th.nn.functional.l1_loss(feats, warped_feats)
 
 
+def similarity_dialog(similarity_dialogs, f_theta_dialogs, dialog_source_index, temperature=1, device='cpu:0'):
+    '''
+    Compute the similarity for the predicted dialogs weighted by their distance
+    similarity_dialogs - dot product between normalized dialog features
+    f_theta_dialogs - f_theta evaluated at dialogs in the source domain
+    dialog_source_index - index of the source dialog
+    temperature - parameter in weighting kernel
+
+    '''
+    src_times = dialog_source_index
+    invf_times = f_theta_dialogs
+    len_src = len(src_times)
+    len_dst = len(invf_times)
+    pairs = th.cartesian_prod(src_times, invf_times.to(device)).reshape((len_src, len_dst, 2))
+
+    # obtain the absolute value of the difference between elements of the said pairs
+    abs_dif = th.abs(pairs[:, :, 0] - pairs[:, :, 1])
+    weight = th.nn.functional.softmax(temperature * 1 / (abs_dif + 1), 0)
+    sim = th.mul(similarity_dialogs, weight).sum(0).mean()
+    return - sim
+
 
 
 class CosineDistanceLoss(nn.Module):
     '''
-    The original loss maximized the cosine similarity of the
-    image and text embeddings of the N real pairs
-    in the batch while minimizing the cosine similarity of the
-    embeddings of the N2 − N incorrect pairings.
-    A symmetric cross entropy loss over these similarity
-    scores is optimized.
-    Here, we take the ALIGNED pairs, using the ground truth book and movie alignments.
+    Maximizing the cosine similarity of the warped features
     '''
     def __init__(self, device='cpu:0'):
         super().__init__()
-        # from trained CLIP model
-        self.temperature = 100
         self.device = device
 
     def forward(self, feats, warped_feats):
-        logits1 = self.temperature * feats.T @ warped_feats
-        logits2 = self.temperature * warped_feats.T @ feats
-        # symmetric loss function
-        labels = th.LongTensor(np.arange(feats.shape[1])).to(self.device)
-        loss_i = th.nn.functional.cross_entropy(logits1, labels)
-        loss_t = th.nn.functional.cross_entropy(logits2, labels)
-        loss = (loss_i + loss_t) / 2
-        return loss
-
-    # # feats 512 x N
-    # def forward(self, feats, warped_feats):
-    #     cosine = 1 - th.diag(th.matmul(feats.T, warped_feats))
-    #     return cosine.mean()
+        return -th.mul(feats, warped_feats).sum(0).mean()
 
 class GTDifLoss(nn.Module):
     def __init__(self):

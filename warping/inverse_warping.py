@@ -58,7 +58,7 @@ def gaussian_kernel(dif, device):
     norm = std*th.sqrt(th.FloatTensor([2*np.pi]).to(device))
     return th.exp(-th.square(dif/std)/2).to(device) / norm
 
-def reverse_mapping(src, invf_times, kernel_type):
+def reverse_mapping(src, invf_times, kernel_type, v=None):
     device='cpu:0'
     # Get dst and src lengths (1-dim)
     len_dst = invf_times.shape[0]
@@ -68,7 +68,11 @@ def reverse_mapping(src, invf_times, kernel_type):
     dst = th.zeros(size=(src.shape[0], len_dst))
     
     # Obtain a grid of pairs of integer pixels and inverse mapped pixels
-    src_times = th.FloatTensor(np.arange(len_src)).to(device)
+    # the V mapping between true source and used source
+    if v is None:
+        src_times = th.FloatTensor(np.arange(len_src)).to(device)
+    else:
+        src_times = th.FloatTensor(v).to(device)
     pairs = th.cartesian_prod(src_times, invf_times.to(device)).reshape((len_src, len_dst, 2))
 
     # obtain the absolute value of the difference between elements of the said pairs

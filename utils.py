@@ -10,7 +10,8 @@ import wandb
 def get_plot(input_times, output_times, gt_times):
     plt.close()
     plt.plot(input_times, output_times, 'r-')
-    plt.plot(input_times, gt_times, 'g-')
+    # plt.plot(input_times, gt_times, 'g-')
+    plt.scatter(gt_times[0], gt_times[1])
     wandb.log({'Mapping': plt})
     # buf = io.BytesIO()
     # plt.savefig(buf, format='jpeg')
