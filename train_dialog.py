@@ -12,7 +12,7 @@ import os
 from network.mlp import MLP
 from warping.inverse_warping import reverse_mapping
 from loss.losses import ReconstructionLoss, CosineDistanceLoss
-from loss.losses import GTDifLoss, GTNormLoss, similarity_dialog
+from loss.losses import GTDifLoss, GTNormLoss, SimilarityDialog
 from utils import get_plot, plot_diff, visualize_input
 import json
 from make_gaussain_pyramide import get_image_pyramid
@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone_GT', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
     parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
+    parser.add_argument('--ddist', default=0.0, type=float, help='weighting of rec loss')
     parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
     parser.add_argument('--recd_loss', default=0.0, type=float, help='weighting of rec loss for dialog')
     parser.add_argument('--try_num', type=str, help='try number')
@@ -62,7 +63,7 @@ if __name__ == "__main__":
     kernel_type = args.kernel_type
 
     # Tensorboard summary writer
-    exp_name = f"REAL_{direction}_kernel_{kernel_type}_loss_{args.exp_info}_try_{args.try_num}_lr{args.lr}_h1h2_{args.h1}_{args.h2}"
+    exp_name = f"{args.exp_info}"
     writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
@@ -125,14 +126,15 @@ if __name__ == "__main__":
     # Define model
     model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
-
+    x = th.load('outputs/Harry.Potter.and.the.Sorcerers.Stone_GT/test_d2__model_best.pt') #test_d2_model.pt')
+    model.load_state_dict(x)
     # Log model training
     wandb.watch(model, log="all")
 
     # loss_reconstruction = ReconstructionLoss()
     loss_rec = CosineDistanceLoss(device=device)
     loss_gt = GTDifLoss()
-
+    similarity_dialog = SimilarityDialog()
     # Define optimizer
     optimizer = th.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -163,11 +165,11 @@ if __name__ == "__main__":
         input_feats_dialog = th.FloatTensor(image_feats_dialog).to(device)
         output_feats_dialog = th.FloatTensor(text_feats_dialog).to(device)
         similarity_dialogs_lookup = input_feats_dialog.T @ output_feats_dialog
-        m = np.zeros_like(similarity_dialogs_lookup)
+        m = th.zeros_like(similarity_dialogs_lookup).to(device)
 
         for i in range(similarity_dialogs_lookup.shape[0]):
-            x = np.argmax(similarity_dialogs_lookup[i, :])
-            y = np.argmax(similarity_dialogs_lookup[:, x])
+            x = th.argmax(similarity_dialogs_lookup[i, :])
+            y = th.argmax(similarity_dialogs_lookup[:, x])
             if y == i:
                 m[i, x] = similarity_dialogs_lookup[i, x]
         m[similarity_dialogs_lookup>0.8] = similarity_dialogs_lookup[similarity_dialogs_lookup>.8]
@@ -203,12 +205,12 @@ if __name__ == "__main__":
     # Create times dataset and dataloader
     dataset = TimesDataset(output_times_scaled)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-
-    while epoch < 500:
+    best_loss = 0
+    while True:
         pred_invf_times_scaled = []
         index = []
         # Run times through alignment network (mlp)
-        for i, batch in enumerate(tqdm(dataloader)):
+        for i, batch in enumerate(dataloader):
             batch = batch[0].to(device)
 
             invf_output = model.forward(batch.unsqueeze(1))
@@ -231,9 +233,9 @@ if __name__ == "__main__":
         # pred_output_feats = reverse_mapping(input_feats, pred_invf_times_content, kernel_type, v=v_content).to(device)
         # lossR = loss_rec(output_feats, pred_output_feats.to(device))
         lossR = 0
-        lossRD = similarity_dialog(similarity_dialogs_lookup, pred_invf_times[dialog_index_source.long()],
-                                   th.FloatTensor(v_dialog), device=device)
-
+        lossRD, loss_D_dist = similarity_dialog(m, pred_invf_times[dialog_index_source.long()],
+                                   th.FloatTensor(v_dialog).to(device), device=device, temperature=1000)
+        ipdb.set_trace()
         # input are the predicted coordinates in movie where they should match to book,
         # output are matching coordinates in the book
         lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
@@ -243,8 +245,8 @@ if __name__ == "__main__":
         wandb.log({'epoch': epoch,
                    'reconstruction_loss_content': lossR,
                    'ground_truth_loss': lossGT,
-                   'reconstruction_loss_dialog': lossRD,
-                   # 'selfsupervised_loss': lossSS,
+                   'reconstruction_loss_dialog': -lossRD,
+                   'd_dist_loss': loss_D_dist,
                    'lambda_gt': args.gt_loss, 'lambda_rec': args.rec_loss,
                    'lambda_recd': args.recd_loss})
 
@@ -252,17 +254,17 @@ if __name__ == "__main__":
         loss_prev = loss_now
         optimizer.zero_grad()
 
-        if loss_now > loss_prev:
-            lr *= 0.1
+        #if loss_now > loss_prev:
+        #    lr *= 0.1
 
-        loss_ = args.gt_loss * lossGT + args.recd_loss * lossRD  #args.clip_loss * lossCLIP + args.ss_loss * lossSS
+        loss_ = args.gt_loss * lossGT + args.recd_loss * lossRD  + args.ddist+loss_D_dist#args.clip_loss * lossCLIP + args.ss_loss * lossSS
         loss_.backward()
         loss_now = loss_
 
 
         # Optimizer step
         optimizer.step()
-        print(f"Epoch {epoch} loss GT: {lossGT} loss R {lossR} loss RDialog {lossRD}")
+        print(f"Epoch {epoch} loss GT: {lossGT} loss R {lossR} loss RDialog {-lossRD}")
 
 
         # Only every 5 epochs, visualize images and mapping
@@ -278,7 +280,10 @@ if __name__ == "__main__":
             #           pred_output_feats.cpu().data.numpy(),
             #           output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
         epoch += 1
-
+        if -loss_now > best_loss:
+            best_loss = -loss_now
+            save_path = f"outputs/{args.movie}"
+            th.save(model.state_dict(), f"{save_path}/{exp_name}_model_best.pt")
 
 
     
