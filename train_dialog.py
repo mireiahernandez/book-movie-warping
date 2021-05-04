@@ -37,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
     parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
     parser.add_argument('--ddist', default=0.0, type=float, help='weighting of rec loss')
+    parser.add_argument('--gt_lossD', default=0.0, type=float, help='weighting of rec loss')
     parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
     parser.add_argument('--recd_loss', default=0.0, type=float, help='weighting of rec loss for dialog')
     parser.add_argument('--try_num', type=str, help='try number')
@@ -155,6 +156,8 @@ if __name__ == "__main__":
     gt_dict[0] = gt_dict[0]//2**level
     gt_dict[1] = gt_dict[1]//2**level
 
+    gt_dict_dialogs = json.load(open(f"data/{args.movie}/gt_dialogs.json", 'r'))
+    gt_dict_dialogs = [np.array(gt_dict_dialogs[1]), np.array(gt_dict_dialogs[0])]
 
     # Define input feats
     if direction == 'm2b':
@@ -235,9 +238,10 @@ if __name__ == "__main__":
         lossR = 0
         lossRD, loss_D_dist = similarity_dialog(m, pred_invf_times[dialog_index_source.long()],
                                    th.FloatTensor(v_dialog).to(device), device=device, temperature=1000)
-        ipdb.set_trace()
+        # ipdb.set_trace()
         # input are the predicted coordinates in movie where they should match to book,
         # output are matching coordinates in the book
+        lossGT_dialogs = th.nn.functional.l1_loss(pred_invf_times[gt_dict_dialogs[0]], th.LongTensor(gt_dict_dialogs[1]).to(device))
         lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
 
         # metric = avg_distance_to_nearest_gt()
@@ -248,6 +252,7 @@ if __name__ == "__main__":
                    'reconstruction_loss_dialog': -lossRD,
                    'd_dist_loss': loss_D_dist,
                    'lambda_gt': args.gt_loss, 'lambda_rec': args.rec_loss,
+                   'gt_loss_dialogs': lossGT_dialogs,
                    'lambda_recd': args.recd_loss})
 
         # Backpropagate and update losses
@@ -257,7 +262,7 @@ if __name__ == "__main__":
         #if loss_now > loss_prev:
         #    lr *= 0.1
 
-        loss_ = args.gt_loss * lossGT + args.recd_loss * lossRD  + args.ddist+loss_D_dist#args.clip_loss * lossCLIP + args.ss_loss * lossSS
+        loss_ = args.gt_loss * lossGT + args.recd_loss * lossRD + args.ddist*loss_D_dist + args.gt_lossD*lossGT_dialogs #args.clip_loss * lossCLIP + args.ss_loss * lossSS
         loss_.backward()
         loss_now = loss_
 
