@@ -159,9 +159,10 @@ if __name__ == "__main__":
         # Scale input and output times to [0,1]
         level_input_times_scaled = level_input_times / (len_input - 1)
         level_output_times_scaled = level_output_times / (len_output - 1)
+        level_output_times_scaled = th.autograd.Variable(level_output_times_scaled.unsqueeze(1).to(device), requires_grad=True)
         org_input_times_scaled = org_input_times / (org_len_input - 1)
         org_output_times_scaled = org_output_times / (org_len_output - 1)
-
+        org_output_times_scaled = th.autograd.Variable(org_output_times_scaled.unsqueeze(1).to(device), requires_grad=True)
 
 
         # # Create times dataset and dataloader
@@ -172,8 +173,9 @@ if __name__ == "__main__":
         else:
             num_epochs = 500
         for i in range(num_epochs): # epoch < 500:
-            pred_invf_times_scaled = model.forward(level_output_times_scaled.unsqueeze(1).to(device)).squeeze()
-            org_pred_invf_times_scaled = model.forward(org_output_times_scaled.unsqueeze(1).to(device)).squeeze()
+
+            pred_invf_times_scaled = model.forward(level_output_times_scaled).squeeze()
+            org_pred_invf_times_scaled = model.forward(org_output_times_scaled).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (len_input - 1) # shape No
