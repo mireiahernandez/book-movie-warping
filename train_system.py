@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 import numpy as np
 import os
-from network.mlp import MLP_base as MLP
+from network.mlp import MLP #_base as MLP
 from warping.inverse_warping import reverse_mapping
 from loss.losses import CosineDistanceLoss
 from loss.losses import GTDifLoss
@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
 
     # Define model
-    model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
+    model = MLP(input_size, device=device) #hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
 
     # Log model training
@@ -178,7 +178,7 @@ if __name__ == "__main__":
             org_pred_invf_times_scaled = model.forward(org_output_times_scaled).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
-            org_pred_invf_times = org_pred_invf_times_scaled * (len_input - 1) # shape No
+            org_pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
 
             pred_output_feats = reverse_mapping(input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
