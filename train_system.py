@@ -88,25 +88,29 @@ if __name__ == "__main__":
     # mask = np.array([(i in include_idx) for i in range(book_len)])
     # visual_sentences = all_sentences[~mask]
 
+    # Transform to tensors
+    image_feats = th.FloatTensor(image_feats).T  # shape (512, Nm)
+    text_feats = th.FloatTensor(text_feats).T  # shape (512, Nb)
+
+    # Normalize
+    image_feats /= image_feats.norm(dim=0, keepdim=True)
+    text_feats /= text_feats.norm(dim=0, keepdim=True)
+
     # Get GT dictionary
     gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
         org_len_input, org_len_output = movie_len, book_len
+        org_input_feats, org_output_feats = image_feats, text_feats
     else:
         gt_dict = [np.array([i['movie_ind'] for i in gt_dict]), np.array([i['book_ind'] for i in gt_dict])]
         gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]]
         org_len_input, org_len_output = book_len, movie_len
+        org_input_feats, org_output_feats = text_feats, image_feats
 
 
-    # Transform to tensors
-    image_feats = th.FloatTensor(image_feats).T  # shape (512, Nm)
-    text_feats = th.FloatTensor(text_feats).T # shape (512, Nb)
-    
-    # Normalize
-    image_feats /= image_feats.norm(dim=0, keepdim=True)
-    text_feats /= text_feats.norm(dim=0, keepdim=True)
+
 
     # Get image pyramids
     text_pyramid = get_image_pyramid(text_feats)
@@ -168,12 +172,12 @@ if __name__ == "__main__":
         # # Create times dataset and dataloader
         # dataset = TimesDataset(output_times_scaled)
         # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-        if level != 0:
-            num_epochs = 300
-        else:
-            num_epochs = 500
+        # if level != 0:
+        #     num_epochs = 100
+        # else:
+        #     num_epochs = 300
+        num_epochs = 300
         for i in range(num_epochs): # epoch < 500:
-
             pred_invf_times_scaled = model.forward(level_output_times_scaled).squeeze()
             org_pred_invf_times_scaled = model.forward(org_output_times_scaled).squeeze()
             # re-scale to 0 len_output -1
@@ -185,12 +189,19 @@ if __name__ == "__main__":
 
             lossGT = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
             lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
+
+            fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
+            gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_input_feats[:, gt_dict[0]]).sum(0).mean()
+            gt_sim_score_dialog = th.mul(fine_pred_output_feats[:, gt_dict_dialog[0]],
+                                         org_input_feats[:, gt_dict_dialog[0]]).sum(0).mean()
             # Write to wandb
             wandb.log({'epoch': epoch,
                        'reconstruction_loss_content': -lossR,
                        'ground_truth_loss': lossGT,
                        'ground_truth_loss_dialog': lossGTD,
-                       'lambda_gt': args.gt_loss, 'lambda_rec': args.rec_loss})
+                       'gt_similarity_score': gt_sim_score,
+                       'gt_similarity_score_dialog': gt_sim_score_dialog,
+                       })
 
             # Backpropagate and update losses
             loss_prev = loss_now
