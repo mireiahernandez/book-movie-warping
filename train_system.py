@@ -102,12 +102,12 @@ if __name__ == "__main__":
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
         org_len_input, org_len_output = movie_len, book_len
-        org_input_feats, org_output_feats = image_feats, text_feats
+        org_input_feats, org_output_feats = image_feats.to(device), text_feats
     else:
         gt_dict = [np.array([i['movie_ind'] for i in gt_dict]), np.array([i['book_ind'] for i in gt_dict])]
         gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]]
         org_len_input, org_len_output = book_len, movie_len
-        org_input_feats, org_output_feats = text_feats, image_feats
+        org_input_feats, org_output_feats = text_feats.to(device), image_feats
 
 
 
@@ -194,6 +194,7 @@ if __name__ == "__main__":
             gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_input_feats[:, gt_dict[0]]).sum(0).mean()
             gt_sim_score_dialog = th.mul(fine_pred_output_feats[:, gt_dict_dialog[0]],
                                          org_input_feats[:, gt_dict_dialog[0]]).sum(0).mean()
+            score_fine_scale = th.mul(fine_pred_output_feats, org_input_feats).sum(0).mean()
             # Write to wandb
             wandb.log({'epoch': epoch,
                        'reconstruction_loss_content': -lossR,
@@ -201,6 +202,7 @@ if __name__ == "__main__":
                        'ground_truth_loss_dialog': lossGTD,
                        'gt_similarity_score': gt_sim_score,
                        'gt_similarity_score_dialog': gt_sim_score_dialog,
+                       'similarity_score_all': score_fine_scale,
                        })
 
             # Backpropagate and update losses
