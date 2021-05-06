@@ -58,7 +58,7 @@ if __name__ == "__main__":
     output_size = 1
     num_epochs = 100000
     lr = args.lr
-    weight_decay = 1e-4
+    weight_decay = 1e-5
     batch_size = 1024
     direction = args.direction
     kernel_type = args.kernel_type
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     text_feats_dialog /= text_feats_dialog.norm(dim=0, keepdim=True)
 
     # get visual sentences index
-    all_sentences = np.arange(book_len)
+    all_sentences= np.arange(book_len)
     include_idx = set(dialog_times['dialog_book_times'])
     mask = np.array([(i in include_idx) for i in range(book_len)])
     visual_sentences = all_sentences[~mask]
@@ -125,10 +125,10 @@ if __name__ == "__main__":
 
 
     # Define model
-    model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
+    model = MLP(input_size, device=device) #hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
-    x = th.load('outputs/Harry.Potter.and.the.Sorcerers.Stone_GT/test_d2__model_best.pt') #test_d2_model.pt')
-    model.load_state_dict(x)
+    #x = th.load('outputs/Harry.Potter.and.the.Sorcerers.Stone_GT/test_d2__model_best.pt') #test_d2_model.pt')
+    #model.load_state_dict(x)
     # Log model training
     wandb.watch(model, log="all")
 
@@ -156,9 +156,10 @@ if __name__ == "__main__":
     gt_dict[0] = gt_dict[0]//2**level
     gt_dict[1] = gt_dict[1]//2**level
 
-    gt_dict_dialogs = json.load(open(f"data/{args.movie}/gt_dialogs.json", 'r'))
+    gt_dict_dialogs = np.load(f"data/{args.movie}/gt_dialogs.npy")
     gt_dict_dialogs = [np.array(gt_dict_dialogs[1]), np.array(gt_dict_dialogs[0])]
-
+    #ipdb.set_trace()
+    #gt = [[dialog_times['dialog_movie_times'][i] for i in gt[1]], [dialog_times['dialog_book_times'][i] for i in gt[0]]]
     # Define input feats
     if direction == 'm2b':
         input_feats = th.FloatTensor(image_pyramid[level]).to(device)
@@ -241,9 +242,8 @@ if __name__ == "__main__":
         # ipdb.set_trace()
         # input are the predicted coordinates in movie where they should match to book,
         # output are matching coordinates in the book
-        lossGT_dialogs = th.nn.functional.l1_loss(pred_invf_times[gt_dict_dialogs[0]], th.LongTensor(gt_dict_dialogs[1]).to(device))
-        lossGT = th.nn.functional.l1_loss(pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
-
+        lossGT_dialogs = th.nn.functional.mse_loss(pred_invf_times[gt_dict_dialogs[0]], th.FloatTensor(gt_dict_dialogs[1]).to(device))
+        lossGT = th.nn.functional.mse_loss(pred_invf_times[gt_dict[0]], th.FloatTensor(gt_dict[1]).to(device))
         # metric = avg_distance_to_nearest_gt()
         # Write to wandb
         wandb.log({'epoch': epoch,
@@ -269,7 +269,8 @@ if __name__ == "__main__":
 
         # Optimizer step
         optimizer.step()
-        print(f"Epoch {epoch} loss GT: {lossGT} loss R {lossR} loss RDialog {-lossRD}")
+        if epoch %50==0:
+            print(f"Epoch {epoch} loss GT: {lossGT} loss R {lossR} loss RDialog {-lossRD} loss Dl2 {lossGT_dialogs} total loss {loss_}")
 
 
         # Only every 5 epochs, visualize images and mapping
