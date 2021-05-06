@@ -168,7 +168,7 @@ if __name__ == "__main__":
         # dataset = TimesDataset(output_times_scaled)
         # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
         if level != 0:
-            num_epochs = 100
+            num_epochs = 300
         else:
             num_epochs = 500
         for i in range(num_epochs): # epoch < 500:
