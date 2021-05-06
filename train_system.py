@@ -78,23 +78,25 @@ if __name__ == "__main__":
     book_len = text_feats.shape[0]
     movie_len = image_feats.shape[0]
 
-    # Get dialog times
-    dialog_times = np.load(f'data/{args.movie}/dialog_times_dict.npy',
-                           allow_pickle=True).item()
-
-    # get visual sentences index
-    all_sentences = np.arange(book_len)
-    include_idx = set(dialog_times['dialog_book_times'])
-    mask = np.array([(i in include_idx) for i in range(book_len)])
-    visual_sentences = all_sentences[~mask]
+    # # Get dialog times
+    # dialog_times = np.load(f'data/{args.movie}/dialog_times_dict.npy',
+    #                        allow_pickle=True).item()
+    #
+    # # get visual sentences index
+    # all_sentences = np.arange(book_len)
+    # include_idx = set(dialog_times['dialog_book_times'])
+    # mask = np.array([(i in include_idx) for i in range(book_len)])
+    # visual_sentences = all_sentences[~mask]
 
     # Get GT dictionary
     gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
+    gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
         org_len_input, org_len_output = movie_len, book_len
     else:
         gt_dict = [np.array([i['movie_ind'] for i in gt_dict]), np.array([i['book_ind'] for i in gt_dict])]
+        gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]]
         org_len_input, org_len_output = book_len, movie_len
 
 
@@ -170,8 +172,8 @@ if __name__ == "__main__":
         else:
             num_epochs = 500
         for i in range(num_epochs): # epoch < 500:
-            pred_invf_times_scaled = model.forward(level_output_times_scaled.unsqueeze(1).to(device))
-            org_pred_invf_times_scaled = model.forward(org_output_times_scaled.unsqueeze(1).to(device))
+            pred_invf_times_scaled = model.forward(level_output_times_scaled.unsqueeze(1).to(device)).squeeze()
+            org_pred_invf_times_scaled = model.forward(org_output_times_scaled.unsqueeze(1).to(device)).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (len_input - 1) # shape No
@@ -180,7 +182,7 @@ if __name__ == "__main__":
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
 
             lossGT = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
-            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0]], th.FloatTensor(gt_dict[1]).to(device))
+            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
             # Write to wandb
             wandb.log({'epoch': epoch,
                        'reconstruction_loss_content': -lossR,
