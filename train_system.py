@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 import numpy as np
 import os
-from network.mlp import MLP_base as MLP
+from network.mlp import MLP, positional_encoding
 from warping.inverse_warping import reverse_mapping
 from loss.losses import CosineDistanceLoss
 from loss.losses import GTDifLoss
@@ -18,18 +18,6 @@ import json
 from make_gaussain_pyramide import get_image_pyramid
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-# class TimesDataset(Dataset):
-#     def __init__(self, times):
-#         self.times = times
-#
-#     def __len__(self):
-#         return len(self.times)
-#
-#     def __getitem__(self, idx):
-#         return self.times[idx], idx
-
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -40,19 +28,16 @@ if __name__ == "__main__":
     parser.add_argument('--gtd_loss', default=0.0, type=float, help='weighting of rec loss for dialog')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, default='linear', help='kernel type')
+    parser.add_argument('--pos_encoding', type=int, default=6, help='Number of encoding functions used to compute a positional encoding')
     parser.add_argument('--print_every', type=int, default=20, help='kernel type')
     parser.add_argument('--exp_info', type=str)
-    parser.add_argument('--h1', type=int, default=64, help='hidden dim 1')
-    parser.add_argument('--h2', type=int, default=32, help='hidden dim 2')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
 
     args = parser.parse_args()
     # Define parameters
-    input_size = 1
-    hidden_size1 = args.h1
-    hidden_size2 = args.h2
+    input_size = 1 + 2*args.pos_encoding
     output_size = 1
     num_epochs = 100000
     lr = args.lr
@@ -110,8 +95,6 @@ if __name__ == "__main__":
         org_input_feats, org_output_feats = text_feats.to(device), image_feats
 
 
-
-
     # Get image pyramids
     text_pyramid = get_image_pyramid(text_feats)
     # text_pyramid_content = get_image_pyramid(text_feats[:, visual_sentences])
@@ -119,7 +102,7 @@ if __name__ == "__main__":
 
 
     # Define model
-    model = MLP(input_size, hidden_size1, hidden_size2, output_size, device=device)
+    model = MLP(input_size, device=device)
     model = model.to(device)
 
     # Log model training
@@ -178,8 +161,10 @@ if __name__ == "__main__":
         #     num_epochs = 300
         num_epochs = 300
         for i in range(num_epochs): # epoch < 500:
-            pred_invf_times_scaled = model.forward(level_output_times_scaled).squeeze()
-            org_pred_invf_times_scaled = model.forward(org_output_times_scaled).squeeze()
+            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=6)
+            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=6)
+            pred_invf_times_scaled = model.forward(inp1).squeeze()
+            org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
@@ -191,10 +176,10 @@ if __name__ == "__main__":
             lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
 
             fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
-            gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_input_feats[:, gt_dict[0]]).sum(0).mean()
+            gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_output_feats[:, gt_dict[0]]).sum(0).mean()
             gt_sim_score_dialog = th.mul(fine_pred_output_feats[:, gt_dict_dialog[0]],
-                                         org_input_feats[:, gt_dict_dialog[0]]).sum(0).mean()
-            score_fine_scale = th.mul(fine_pred_output_feats, org_input_feats).sum(0).mean()
+                                         org_output_feats[:, gt_dict_dialog[0]]).sum(0).mean()
+            score_fine_scale = th.mul(fine_pred_output_feats, org_output_feats).sum(0).mean()
             # Write to wandb
             wandb.log({'epoch': epoch,
                        'reconstruction_loss_content': -lossR,
