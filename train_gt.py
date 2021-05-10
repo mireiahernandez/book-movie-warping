@@ -70,7 +70,8 @@ if __name__ == "__main__":
     text_feats /= text_feats.norm(dim=0, keepdim=True)
 
     # Get GT dictionary
-    gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
+    gt_dict = np.load(f"data/{args.movie}/gt_mapping_highsim.npy", allow_pickle=True)
+    #gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
     # gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
@@ -118,8 +119,8 @@ if __name__ == "__main__":
         pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
 
         pred_output_feats = reverse_mapping(org_input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
-        lossR = loss_rec(org_output_feats, pred_output_feats.to(device))
-
+        lossR = loss_rec(org_output_feats.to(device), pred_output_feats.to(device))
+        ipdb.set_trace()
         lossGT = th.nn.functional.l1_loss(pred_invf_times, th.LongTensor(np.arange(org_len_input)).to(device))
 
         # Write to wandb

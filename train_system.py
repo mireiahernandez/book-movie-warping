@@ -5,7 +5,6 @@ from torch.utils.data import Dataset, DataLoader
 import argparse
 from tqdm import tqdm 
 import time
-from torch.utils.tensorboard import SummaryWriter
 import wandb
 import numpy as np
 import os
@@ -47,7 +46,6 @@ if __name__ == "__main__":
 
     # Tensorboard summary writer
     exp_name = f"{direction}_{args.exp_info}_try_{args.try_num}"
-    writer = SummaryWriter(log_dir="runs/" + exp_name)
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
@@ -82,7 +80,8 @@ if __name__ == "__main__":
     text_feats /= text_feats.norm(dim=0, keepdim=True)
 
     # Get GT dictionary
-    gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
+    gt_dict = np.load(f"data/{args.movie}/gt_mapping_highsim.npy", allow_pickle=True)
+#    gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
