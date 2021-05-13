@@ -24,6 +24,10 @@ if __name__ == "__main__":
     original_gt = json.load(open(os.path.join(bksnmvs_path,
                                               'ground_truth_annotation', f'content_{args.movie}.json')))
     text_feats, image_feats = np.load(f'data/{args.movie}/text_features.npy'), np.load(f'data/{args.movie}/image_features.npy')
+    image_feats = np.asarray(image_feats.T, dtype=np.float64)
+    text_feats = np.asarray(text_feats.T, dtype=np.float64)
+    text_feats /= np.linalg.norm(text_feats, axis=0, keepdims=True)
+    image_feats /= np.linalg.norm(image_feats, axis=0, keepdims=True)
 
 
     new_gt = []
