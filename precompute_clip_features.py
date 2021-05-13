@@ -21,13 +21,16 @@ anno_path = '{}/antonio/annotation/'.format(bksnmvs_path)
 frames_by_number_path = '/data/vision/torralba/datasets/movies/data/frames_by_number'
 
 
-movies = ['American.Psycho','Brokeback.Mountain','Fight.Club','Gone.Girl','Harry.Potter.and.the.Sorcerers.Stone','No.Country.for.Old.Men','One.Flew.Over.the.Cuckoo.Nest','Shawshank.Redemption','The.Firm','The.Green.Mile','The.Road']
+movies = ['American.Psycho', 'Brokeback.Mountain', 'Fight.Club', 'Gone.Girl',
+          'Harry.Potter.and.the.Sorcerers.Stone', 'No.Country.for.Old.Men', 'One.Flew.Over.the.Cuckoo.Nest',
+          'Shawshank.Redemption', 'The.Firm', 'The.Green.Mile', 'The.Road']
+
 movies_titles = [movie.replace('.', '_') for movie in movies]
 imbds = ['tt0144084','tt0388795','tt0137523','tt2267998','tt0241527','tt0477348','tt0073486','tt0111161','tt0106918','tt0120689','tt0898367']
 
-
-
-
+'''
+missing frames: americn psycho, fight club, No.Country.for.Old.Men, Shawshank.Redemption, 'The.Green.Mile', 'The.Road', the firm
+'''
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
