@@ -2,6 +2,8 @@ import json
 import numpy as np
 import argparse
 import os
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 FRAME_NEIGHBOURHOOD = 10
 SENTENCE_NEIGHBOURHOOD = 10
@@ -52,5 +54,9 @@ if __name__ == "__main__":
                 j += 1
         atype = [int('Dialog' in o['Alignment Type']), int('Visual' in o['Alignment Type']), int('Sound' in o['Alignment Type'])]
         new_gt.append({'book_ind': book_time[b], 'movie_ind': frame_time[t], 'type': atype})
+
+    x = text_feats.T @ image_feats
+    sns.displot(x.flatten())
+    plt.savefig(f"data/{args.movie}/clip_score_distribution.jpg")
     np.save(f"data/{args.movie}/gt_mapping.npy", new_gt)
     print(f"Ground truth saved at: data/{args.movie}/gt_mapping.npy")
