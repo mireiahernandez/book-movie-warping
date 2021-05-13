@@ -81,8 +81,10 @@ if __name__ == "__main__":
 
     # Get GT dictionary
     gt_dict = np.load(f"data/{args.movie}/gt_mapping_highsim.npy", allow_pickle=True)
-#    gt_dict = json.load(open(f"data/{args.movie}/gt_mapping.json", 'r'))
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
+    rng = np.random.default_rng(2021)
+    train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
+    val = [i for i in range(len(gt_dict)) if i not in train]
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
         org_len_input, org_len_output = movie_len, book_len
@@ -158,10 +160,10 @@ if __name__ == "__main__":
         #     num_epochs = 100
         # else:
         #     num_epochs = 300
-        num_epochs = 300
+        num_epochs = 150
         for i in range(num_epochs): # epoch < 500:
-            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=6)
-            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=6)
+            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
+            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
             pred_invf_times_scaled = model.forward(inp1).squeeze()
             org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
@@ -171,7 +173,8 @@ if __name__ == "__main__":
             pred_output_feats = reverse_mapping(input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
 
-            lossGT = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0]], th.LongTensor(gt_dict[1]).to(device))
+            lossGT = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device))
+            lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device))
             lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
 
             fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
@@ -187,6 +190,7 @@ if __name__ == "__main__":
                        'gt_similarity_score': gt_sim_score,
                        'gt_similarity_score_dialog': gt_sim_score_dialog,
                        'similarity_score_all': score_fine_scale,
+                       'ground_truth_loss_validation': lossGT_val,
                        })
 
             # Backpropagate and update losses
@@ -200,10 +204,8 @@ if __name__ == "__main__":
             loss_.backward()
             loss_now = loss_
 
-
             # Optimizer step
             optimizer.step()
-
 
             # Only every 5 epochs, visualize images and mapping
             if epoch % args.print_every == 0:
@@ -213,19 +215,15 @@ if __name__ == "__main__":
                     visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
 
                 # Visualize mapping
-
-                get_plot(org_output_times.cpu(), org_pred_invf_times.detach().cpu(), gt_dict)
+                get_plot(org_output_times.cpu(), org_pred_invf_times.detach().cpu(), gt_dict,
+                         split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog)
                 plot_diff(input_feats.cpu().data.numpy(),
                           pred_output_feats.cpu().data.numpy(),
                           output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
             epoch += 1
 
-
-
     
     end_time = time.time()
-
-
     save_path = f"outputs/{args.movie}"
     th.save(model.state_dict(), f"{save_path}/{exp_name}_model.pt")
     # wandb.save('model.h5')
