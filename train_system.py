@@ -20,7 +20,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone_GT', type=str, help='movie name')
+    parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
     parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
     parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     text_feats /= text_feats.norm(dim=0, keepdim=True)
 
     # Get GT dictionary
-    gt_dict = np.load(f"data/{args.movie}/gt_mapping_highsim.npy", allow_pickle=True)
+    gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
     train = sorted(rng.choice(range(len(gt_dict[0])), len(gt_dict[0]) // 2 + 1, False))
