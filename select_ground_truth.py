@@ -30,7 +30,7 @@ if __name__ == "__main__":
     text_feats = np.asarray(text_feats.T, dtype=np.float64)
     text_feats /= np.linalg.norm(text_feats, axis=0, keepdims=True)
     image_feats /= np.linalg.norm(image_feats, axis=0, keepdims=True)
-
+    book_len, movie_len = text_feats.shape[1], image_feats.shape[1]
 
     new_gt = []
     for o in original_gt:
@@ -40,7 +40,7 @@ if __name__ == "__main__":
         end_frame_time = 2*(end_frame_time[0]*60**2 + end_frame_time[1]*60 + end_frame_time[2])
 
         frame_time = np.array([i for i in range(int(start_frame_time)-FRAME_NEIGHBOURHOOD, int(end_frame_time)+FRAME_NEIGHBOURHOOD)])
-        book_time = np.array([i for i in range(o['id_sentence']-SENTENCE_NEIGHBOURHOOD, int(o['id_sentence'])+SENTENCE_NEIGHBOURHOOD)])
+        book_time = np.array([i for i in range(o['id_sentence']-SENTENCE_NEIGHBOURHOOD, min(book_len, int(o['id_sentence'])+SENTENCE_NEIGHBOURHOOD))])
         x = text_feats[:, book_time].T @ image_feats[:, frame_time]
         ind = np.unravel_index(np.argsort(x, axis=None)[::-1], x.shape)
         found, j = False, 0
@@ -56,6 +56,7 @@ if __name__ == "__main__":
         new_gt.append({'book_ind': book_time[b], 'movie_ind': frame_time[t], 'type': atype})
 
     x = text_feats.T @ image_feats
+    print('Min score:', x.min(), 'Max score:', x.max(), 'Mean score:', x.mean())
     sns.displot(x.flatten())
     plt.savefig(f"data/{args.movie}/clip_score_distribution.jpg")
     np.save(f"data/{args.movie}/gt_mapping.npy", new_gt)

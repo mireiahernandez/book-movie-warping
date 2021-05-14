@@ -62,6 +62,8 @@ if __name__ == "__main__":
     # Get book "image" through CLIP text encoder    
     image_features = clip_image_encoder(frames_files)
     image_features = np.array(image_features)
+    if not os.path.exists(f"data/{args.movie}/"):
+        os.mkdir(f"data/{args.movie}/")
     np.save(f"data/{args.movie}/image_features.npy", image_features)
     print(f"Image features saved at: data/{args.movie}/image_features.npy")
     
