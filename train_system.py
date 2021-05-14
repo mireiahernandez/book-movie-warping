@@ -84,17 +84,17 @@ if __name__ == "__main__":
     gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
-    train = sorted(rng.choice(range(len(gt_dict[0])), len(gt_dict[0]) // 2 + 1, False))
-    val = [i for i in range(len(gt_dict[0])) if i not in train]
+    train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
+    val = [i for i in range(len(gt_dict)) if i not in train]
     if args.direction == 'm2b':
         gt_dict = [np.array([i['book_ind'] for i in gt_dict]), np.array([i['movie_ind'] for i in gt_dict])]
         org_len_input, org_len_output = movie_len, book_len
-        org_input_feats, org_output_feats = image_feats.to(device), text_feats
+        org_input_feats, org_output_feats = image_feats.to(device), text_feats.to(device)
     else:
         gt_dict = [np.array([i['movie_ind'] for i in gt_dict]), np.array([i['book_ind'] for i in gt_dict])]
         gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]]
         org_len_input, org_len_output = book_len, movie_len
-        org_input_feats, org_output_feats = text_feats.to(device), image_feats
+        org_input_feats, org_output_feats = text_feats.to(device), image_feats.to(device)
 
 
     # Get image pyramids
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
 
     # Define model
-    model = MLP(input_size, device=device)
+    model = MLP(input_size, device=device) #hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
     if os.path.exists(args.resume):
         model.load_state_dict(th.load(args.resume))
@@ -156,8 +156,8 @@ if __name__ == "__main__":
 
         num_epochs = 150
         for i in range(num_epochs): # epoch < 500:
-            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=6)
-            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=6)
+            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
+            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
             pred_invf_times_scaled = model.forward(inp1).squeeze()
             org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
