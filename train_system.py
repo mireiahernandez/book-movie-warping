@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
+    parser.add_argument('--resume', type=str, default='')
 
     args = parser.parse_args()
     # Define parameters
@@ -105,6 +106,9 @@ if __name__ == "__main__":
     # Define model
     model = MLP(input_size, device=device)
     model = model.to(device)
+    if os.path.exists(args.resume):
+        model.load_state_dict(th.load(args.resume))
+        print(f'Model weights initialized from: {args.resume}')
 
     # Log model training
     wandb.watch(model, log="all")
