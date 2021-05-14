@@ -55,7 +55,7 @@ if __name__ == "__main__":
         frames_files = frames_files[::10]
     elif os.path.exists(f"{frames_by_number_path2}/{args.movie.replace('.', '_')}/"):
         frames_path = f"{frames_by_number_path2}/{args.movie.replace('.', '_')}/*.jpg"
-        frames_dirs = sorted(glob.glob(frames_path))
+        frames_files = sorted(glob.glob(frames_path))
     else:
         raise FileNotFoundError
     
