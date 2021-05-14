@@ -6,7 +6,6 @@ import PIL.Image
 from torchvision.transforms import ToTensor
 import wandb
 
-
 def get_plot(input_times, output_times, gt_times, split=None, gt_dict_dialog=None):
     plt.close()
     plt.plot(input_times, output_times, 'r-', label='prediction')
@@ -18,15 +17,12 @@ def get_plot(input_times, output_times, gt_times, split=None, gt_dict_dialog=Non
 
     if gt_dict_dialog is not None:
         plt.scatter(gt_dict_dialog[0], gt_dict_dialog[1], c='b', label='pseudo-gt dialogs')
-    plt.legend()
-    wandb.log({'Mapping': plt})
-    # buf = io.BytesIO()
-    # plt.savefig(buf, format='jpeg')
-    # buf.seek(0)
-    # image = PIL.Image.open(buf)
-    # image = ToTensor()(image)
-    # writer.add_image('Mapping', image, epoch)
-    # buf.close()
+    wandb.log({'Prediction': plt})
+
+def plot_grad(grads):
+    plt.close()
+    plt.plot(grads, 'r-', label='prediction')
+    wandb.log({'Gradient': plt})
 
 
 
