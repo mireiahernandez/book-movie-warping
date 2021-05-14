@@ -4,6 +4,7 @@ import pysrt
 import matplotlib.pyplot as plt
 from sentence_transformers import SentenceTransformer
 import argparse
+from nltk.tokenize import word_tokenize, RegexpTokenizer
 
 get_time_in_seconds = lambda a: 60*60*a.hours+60*a.minutes+a.seconds +0.001*a.milliseconds
 
@@ -44,6 +45,63 @@ def get_dialog_cc(subs_path):
     lens = [len(word_tokenize(i)) for i in dialog_cc]
     print('Script original: Min: {}, Max: {}, Mean: {}'.format(min(lens), max(lens), np.mean(lens)))
     return dialog_cc, time_in_movie
+
+
+def group_dialog(times, text, NUM_SENTENCES=2, MIN_WORDS=8):
+    '''
+
+    :param times: sentence ids of the dialog in a book, np.array
+    :param text: dialog text
+    :param NUM_SENTENCES: number of sentences between two dialogs to group
+    :param MIN_WORDS: minimal number of words in a sentences
+    :return: grouped ids of sentences, grouped dialog text
+    '''
+    assert len(times) == len(text)
+    tokenizer = RegexpTokenizer(r'\w+')
+    book_text_grouped = []
+    dialog_book_times = []
+    group = ' '
+    group_ = []
+    for ii, i in enumerate(times):
+        if ii == 0 and np.abs(times[ii+1] - i)>=NUM_SENTENCES:
+            dialog_book_times.append([i])
+            book_text_grouped.append(text[ii])
+            continue
+        if ii == len(times)-1:
+            if np.abs(times[ii-1] - i)<NUM_SENTENCES:
+                group += text[ii]
+                group_.append(i)
+                book_text_grouped.append(group)
+                dialog_book_times.append(group_)
+            else:
+                book_text_grouped.append(group)
+                dialog_book_times.append(group_)
+                book_text_grouped.append(text[ii])
+                dialog_book_times.append([i])
+            break
+
+        if np.abs(times[ii+1] - i)<NUM_SENTENCES:
+            group += text[ii]
+            group_.append(i)
+        else:
+            group += ' '+ text[ii]
+            group_.append(i)
+            book_text_grouped.append(group)
+            group = ''
+            dialog_book_times.append(group_)
+            group_ = []
+
+
+    text_grouped_no_short = []
+    dialog_times_no_short = []
+    for text, time in zip(book_text_grouped, dialog_book_times):
+        if len(tokenizer.tokenize(text))>=MIN_WORDS:
+            text_grouped_no_short.append(text)
+            dialog_times_no_short.append(time)
+    return text_grouped_no_short, dialog_times_no_short
+
+# book_text_grouped, dialog_book_times = group_dialog(dialog_times['dialog_book_times'], book_test, NUM_SENTENCES=3)
+# movie_text_grouped, dialog_movie_times = group_dialog(dialog_times['dialog_movie_times'], movie_text, NUM_SENTENCES=20)
 
 
 if __name__ == '__main__':
