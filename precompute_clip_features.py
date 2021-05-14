@@ -5,6 +5,7 @@ import numpy as np
 import scipy.io
 from clip_model.clip_encoder import clip_image_encoder
 from clip_model.clip_encoder import clip_text_encoder
+import os
 
 def getBookName(filen):
     filen.split('/')[-1]
@@ -19,6 +20,7 @@ dataset_path = '/data/vision/torralba/datasets/movies/data/'
 bksnmvs_path = '/data/vision/torralba/frames/data_acquisition/booksmovies/data/booksandmovies/'
 anno_path = '{}/antonio/annotation/'.format(bksnmvs_path)
 frames_by_number_path = '/data/vision/torralba/datasets/movies/data/frames_by_number'
+frames_by_number_path2 = '/data/vision/scratch/jomat/frames_by_number'
 
 
 movies = ['American.Psycho', 'Brokeback.Mountain', 'Fight.Club', 'Gone.Girl',
@@ -44,14 +46,21 @@ if __name__ == "__main__":
     book_sentences = [sent[0][0] for sent in book_sentences]
 
     # Get movie frames
-    frames_path = f"{frames_by_number_path}/{args.movie.replace('.', '_')}/*"
-    frames_dirs = sorted(glob.glob(frames_path))
-    frames_files = []
-    for frames_dir in frames_dirs:
-        frames_files.extend(sorted(glob.glob(frames_dir + '/*')))
+    if os.path.exists(f"{frames_by_number_path}/{args.movie.replace('.', '_')}/"):
+        frames_path = f"{frames_by_number_path}/{args.movie.replace('.', '_')}/*"
+        frames_dirs = sorted(glob.glob(frames_path))
+        frames_files = []
+        for frames_dir in frames_dirs:
+            frames_files.extend(sorted(glob.glob(frames_dir + '/*')))
+        frames_files = frames_files[::10]
+    elif os.path.exists(f"{frames_by_number_path2}/{args.movie.replace('.', '_')}/"):
+        frames_path = f"{frames_by_number_path2}/{args.movie.replace('.', '_')}/*.jpg"
+        frames_dirs = sorted(glob.glob(frames_path))
+    else:
+        raise FileNotFoundError
     
     # Get book "image" through CLIP text encoder    
-    image_features = clip_image_encoder(frames_files[::10])
+    image_features = clip_image_encoder(frames_files)
     image_features = np.array(image_features)
     np.save(f"data/{args.movie}/image_features.npy", image_features)
     print(f"Image features saved at: data/{args.movie}/image_features.npy")

@@ -12,7 +12,7 @@ from network.mlp import MLP, positional_encoding
 from warping.inverse_warping import reverse_mapping
 from loss.losses import CosineDistanceLoss
 from loss.losses import GTDifLoss
-from utils import get_plot, plot_diff, visualize_input
+from utils import get_plot, plot_diff, visualize_input, plot_grad
 import json
 from make_gaussain_pyramide import get_image_pyramid
 
@@ -140,26 +140,16 @@ if __name__ == "__main__":
 
         # Get input and output times
         level_input_times = th.FloatTensor(np.arange(len_input)).to(device)
-        level_output_times = th.FloatTensor(np.arange(len_output)).to(device)
+        level_output_times = th.autograd.Variable(th.FloatTensor(np.arange(len_output)).to(device), requires_grad=True)
         org_input_times = th.FloatTensor(np.arange(org_len_input)).to(device)
-        org_output_times = th.FloatTensor(np.arange(org_len_output)).to(device)
+        org_output_times = th.autograd.Variable(th.FloatTensor(np.arange(org_len_output)).to(device), requires_grad=True)
 
         # Scale input and output times to [0,1]
         level_input_times_scaled = level_input_times / (len_input - 1)
         level_output_times_scaled = level_output_times / (len_output - 1)
-        level_output_times_scaled = th.autograd.Variable(level_output_times_scaled.unsqueeze(1).to(device), requires_grad=True)
         org_input_times_scaled = org_input_times / (org_len_input - 1)
         org_output_times_scaled = org_output_times / (org_len_output - 1)
-        org_output_times_scaled = th.autograd.Variable(org_output_times_scaled.unsqueeze(1).to(device), requires_grad=True)
 
-
-        # # Create times dataset and dataloader
-        # dataset = TimesDataset(output_times_scaled)
-        # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-        # if level != 0:
-        #     num_epochs = 100
-        # else:
-        #     num_epochs = 300
         num_epochs = 150
         for i in range(num_epochs): # epoch < 500:
             inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
@@ -170,6 +160,10 @@ if __name__ == "__main__":
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
 
+            gradspred, = th.autograd.grad(org_pred_invf_times, org_output_times,
+                                       grad_outputs=org_pred_invf_times.data.new(org_pred_invf_times.shape).fill_(1),
+                                       retain_graph=True, create_graph=True)
+            grad_penalty = -gradspred[gradspred < 0].mean()
             pred_output_feats = reverse_mapping(input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
 
@@ -191,6 +185,7 @@ if __name__ == "__main__":
                        'gt_similarity_score_dialog': gt_sim_score_dialog,
                        'similarity_score_all': score_fine_scale,
                        'ground_truth_loss_validation': lossGT_val,
+                       'grad_penalty': grad_penalty,
                        })
 
             # Backpropagate and update losses
@@ -200,7 +195,7 @@ if __name__ == "__main__":
             if loss_now > loss_prev:
                 lr *= 0.1
 
-            loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.gtd_loss * lossGTD
+            loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.gtd_loss * lossGTD + grad_penalty
             loss_.backward()
             loss_now = loss_
 
@@ -215,11 +210,12 @@ if __name__ == "__main__":
                     visualize_input(input_feats.cpu().data.numpy(), output_feats.cpu().data.numpy())
 
                 # Visualize mapping
-                get_plot(org_output_times.cpu(), org_pred_invf_times.detach().cpu(), gt_dict,
+                get_plot(org_output_times.cpu().detach().numpy(), org_pred_invf_times.detach().cpu(), gt_dict,
                          split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog)
                 plot_diff(input_feats.cpu().data.numpy(),
                           pred_output_feats.cpu().data.numpy(),
                           output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
+                plot_grad(gradspred.cpu().detach().numpy())
             epoch += 1
 
     
