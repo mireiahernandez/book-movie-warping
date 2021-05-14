@@ -20,7 +20,7 @@ dataset_path = '/data/vision/torralba/datasets/movies/data/'
 bksnmvs_path = '/data/vision/torralba/frames/data_acquisition/booksmovies/data/booksandmovies/'
 anno_path = '{}/antonio/annotation/'.format(bksnmvs_path)
 frames_by_number_path = '/data/vision/torralba/datasets/movies/data/frames_by_number'
-frames_by_number_path2 = '/data/vision/scratch/jomat/frames_by_number'
+frames_by_number_path2 = '/data/vision/torralba/scratch/jomat/frames_by_number'
 
 
 movies = ['American.Psycho', 'Brokeback.Mountain', 'Fight.Club', 'Gone.Girl',
