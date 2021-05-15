@@ -152,8 +152,8 @@ if __name__ == "__main__":
 
         num_epochs = 150
         for i in range(num_epochs): # epoch < 500:
-            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
-            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
+            inp1 = positional_encoding(level_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
+            inp2 = positional_encoding(org_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
             pred_invf_times_scaled = model.forward(inp1).squeeze()
             org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
@@ -185,7 +185,7 @@ if __name__ == "__main__":
                        'gt_similarity_score_dialog': gt_sim_score_dialog,
                        'similarity_score_all': score_fine_scale,
                        'ground_truth_loss_validation': lossGT_val,
-                       'grad_penalty': grad_penalty,
+                       'grad_penalty': grad_penalty, 'lr': lr,
                        })
 
             # Backpropagate and update losses
@@ -196,7 +196,7 @@ if __name__ == "__main__":
                 lr *= 0.1
 
             loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.gtd_loss * lossGTD + grad_penalty
-            loss_.backward()
+            loss_.backward(retain_graph=True)
             loss_now = loss_
 
             # Optimizer step
