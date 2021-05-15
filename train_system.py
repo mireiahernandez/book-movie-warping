@@ -159,8 +159,8 @@ if __name__ == "__main__":
         for i in range(args.num_epochs): # epoch < 500:
             inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
             inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
-            pred_invf_times_scaled = model.forward(inp1).squeeze()
-            org_pred_invf_times_scaled = model.forward(inp2).squeeze()
+            pred_invf_times_scaled = model.forward(inp1.unsqueeze(1)).squeeze()
+            org_pred_invf_times_scaled = model.forward(inp2.unsqueeze(1)).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
