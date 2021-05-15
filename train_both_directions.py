@@ -93,6 +93,8 @@ if __name__ == "__main__":
 
     # Define model
     model = MLP_2dir(input_size, device=device, PE=args.pos_encoding) #hidden_size1, hidden_size2, output_size, device=device)
+    model.to(device)
+
     if os.path.exists(args.resume):
         model.load_state_dict(th.load(args.resume))
         print(f'Model weights initialized from: {args.resume}')
@@ -234,12 +236,12 @@ if __name__ == "__main__":
                 # Visualize mapping
                 get_plot(org_book_times.cpu().detach().numpy(), org_m1_org_range.detach().cpu(), gt_dict,
                          split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog, dir='M2B')
+                plot_grad(gradspred_m2b.cpu().detach().numpy(), dir='M2B')
                 get_plot(org_movie_times.cpu().detach().numpy(), org_b1_org_range.detach().cpu(), [gt_dict[1], gt_dict[0]],
-                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]], dir='M2B')
+                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]], dir='B2M')
                 plot_diff(movie_feats.cpu().data.numpy(),
                           pred_book_feats.cpu().data.numpy(),
                           book_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
-                plot_grad(gradspred_m2b.cpu().detach().numpy(), dir='M2B')
                 plot_grad(gradspred_b2m.cpu().detach().numpy(), dir='B2M')
 
             epoch += 1
