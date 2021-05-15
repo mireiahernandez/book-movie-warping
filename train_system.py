@@ -154,7 +154,7 @@ if __name__ == "__main__":
         org_input_times_scaled = org_input_times / (org_len_input - 1)
         org_output_times_scaled = org_output_times / (org_len_output - 1)
 
-        num_epochs = 150
+        num_epochs = 500
         for i in range(num_epochs): # epoch < 500:
             inp1 = positional_encoding(level_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
             inp2 = positional_encoding(org_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)

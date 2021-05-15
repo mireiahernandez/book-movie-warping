@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--exp_info', default='', type=str)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--cuda', type=int, default=0)
+    parser.add_argument('--num_epochs', type=int, default=150)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
     parser.add_argument('--resume', type=str, default='')
     parser.add_argument('--loss_scaled', type=str, default='N')
@@ -134,8 +135,8 @@ if __name__ == "__main__":
         org_movie_times_scaled = org_movie_times / (org_movie_len - 1)
         org_book_times_scaled = org_book_times / (org_book_len - 1)
 
-        num_epochs = 150
-        for i in range(num_epochs):
+     
+        for i in range(args.num_epochs):
             # 1st forward pass on the coarse scale
             m1, b1, b2m_m2b_b, m2b_b2m_m = model.forward(level_movie_times_scaled, level_book_times_scaled)
             # 2nd forward pass on the fine scale
