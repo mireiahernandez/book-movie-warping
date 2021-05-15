@@ -22,9 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
-    parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
-    parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
-    parser.add_argument('--gtd_loss', default=0.0, type=float, help='weighting of rec loss for dialog')
+    parser.add_argument('--gt_loss', default=1., type=float, help='weighting of gt loss')
     parser.add_argument('--try_num', type=str, help='try number')
     parser.add_argument('--kernel_type', type=str, default='linear', help='kernel type')
     parser.add_argument('--pos_encoding', type=int, default=6, help='Number of encoding functions used to compute a positional encoding')
@@ -34,6 +32,10 @@ if __name__ == "__main__":
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
     parser.add_argument('--resume', type=str, default='')
+    parser.add_argument('--num_epochs', type=int, default=100)
+    parser.add_argument('--GP', type=float, default=0.)
+    parser.add_argument('--R', type=float, default=0.)
+    parser.add_argument('--GTD', type=float, default=0.)
 
     args = parser.parse_args()
     # Define parameters
@@ -46,7 +48,7 @@ if __name__ == "__main__":
     kernel_type = args.kernel_type
 
     # Tensorboard summary writer
-    exp_name = f"{direction}_{args.exp_info}_try_{args.try_num}"
+    exp_name = f"{direction}_{args.exp_info}_PE{args.pos_encoding}_GP{args.GP}_R{args.R}_GTD{args.GTD}_{args.movie}"
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
@@ -154,10 +156,9 @@ if __name__ == "__main__":
         org_input_times_scaled = org_input_times / (org_len_input - 1)
         org_output_times_scaled = org_output_times / (org_len_output - 1)
 
-        num_epochs = 500
-        for i in range(num_epochs): # epoch < 500:
-            inp1 = positional_encoding(level_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
-            inp2 = positional_encoding(org_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
+        for i in range(args.num_epochs): # epoch < 500:
+            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
+            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
             pred_invf_times_scaled = model.forward(inp1).squeeze()
             org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
@@ -171,11 +172,14 @@ if __name__ == "__main__":
             pred_output_feats = reverse_mapping(input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
 
-            lossGT = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device))
-            lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device))
-            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
+            lossGT = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]/org_len_input).to(device))
+            lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]/org_len_input).to(device))
+            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]/org_len_input).to(device))
 
-            fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
+            if level == 0:
+                fine_pred_output_feats = pred_output_feats
+            else:
+                fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
             gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_output_feats[:, gt_dict[0]]).sum(0).mean()
             gt_sim_score_dialog = th.mul(fine_pred_output_feats[:, gt_dict_dialog[0]],
                                          org_output_feats[:, gt_dict_dialog[0]]).sum(0).mean()
@@ -199,7 +203,7 @@ if __name__ == "__main__":
             if loss_now > loss_prev:
                 lr *= 0.1
 
-            loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.gtd_loss * lossGTD + grad_penalty
+            loss_ = args.gt_loss*lossGT + args.R*lossR + args.GTD*lossGTD + args.GP*grad_penalty
             loss_.backward(retain_graph=True)
             loss_now = loss_
 
@@ -226,4 +230,3 @@ if __name__ == "__main__":
     end_time = time.time()
     save_path = f"outputs/{args.movie}"
     th.save(model.state_dict(), f"{save_path}/{exp_name}_model.pt")
-    # wandb.save('model.h5')
