@@ -120,10 +120,10 @@ if __name__ == "__main__":
         book_feats = th.FloatTensor(text_pyramid[level]).to(device)
 
         # Get input and output times
-        level_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(len_movie)).to(device), requires_grad=True)
-        level_book_times = th.autograd.Variable(th.FloatTensor(np.arange(len_book)).to(device), requires_grad=True)
-        org_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(org_movie_len)).to(device), requires_grad=True)
-        org_book_times = th.autograd.Variable(th.FloatTensor(np.arange(org_book_len)).to(device), requires_grad=True)
+        level_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(len_movie)), requires_grad=True).to(device)
+        level_book_times = th.autograd.Variable(th.FloatTensor(np.arange(len_book)), requires_grad=True).to(device)
+        org_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(org_movie_len)), requires_grad=True).to(device)
+        org_book_times = th.autograd.Variable(th.FloatTensor(np.arange(org_book_len)), requires_grad=True).to(device)
 
         # Scale input and output times to [0,1]
         level_movie_times_scaled = level_movie_times / (len_movie - 1)
