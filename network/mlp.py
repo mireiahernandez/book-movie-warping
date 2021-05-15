@@ -90,10 +90,64 @@ class MLP(nn.Module):
             h = th.nn.functional.relu(h)
             if i in self.skips:
                 h = th.cat([x, h], -1)
-
         output = self.output_linear(h)
-        output_clipped = th.max(th.min(output,  th.ones(size=output.shape).to(self.device)), th.zeros(size=output.shape).to(self.device))
+        output_clipped = th.max(th.min(output,  th.ones(size=output.shape).to(self.device)),
+                                th.zeros(size=output.shape).to(self.device))
         return output_clipped
+
+
+class MLP_2dir(nn.Module):
+    def __init__(self, input_size,  device, D=4, W=128, PE=6, output_size=1, skips=[2]):
+        """
+        """
+        super(MLP_2dir, self).__init__()
+        self.D = D
+        self.W = W
+        self.skips = skips
+        self.device = device
+        self.PE = 6
+        self.pts_linears_m2b = nn.ModuleList(
+            [nn.Linear(input_size, W)] + [nn.Linear(W, W) if i not in self.skips else nn.Linear(W + input_size, W) for i in
+                                        range(D - 1)])
+        self.output_linear_m2b = nn.Linear(W, 1)
+        self.pts_linears_b2m = nn.ModuleList(
+            [nn.Linear(input_size, W)] + [nn.Linear(W, W) if i not in self.skips else nn.Linear(W + input_size, W) for i in
+                                        range(D - 1)])
+        self.output_linear_b2m = nn.Linear(W, 1)
+
+    def forward_m2b(self, x):
+        h1 = x
+        for i, l in enumerate(self.pts_linears_m2b):
+            h1 = self.pts_linears_m2b[i](h1)
+            h1 = th.nn.functional.relu(h1)
+            if i in self.skips:
+                h1 = th.cat([x, h1], -1)
+        output_m2b = self.output_linear_m2b(h1)
+        output_clipped_m2b = th.max(th.min(output_m2b,  th.ones(size=output_m2b.shape).to(self.device)),
+                                th.zeros(size=output_m2b.shape).to(self.device))
+        return output_clipped_m2b
+
+    def forward_b2m(self, x):
+        h2 = x
+        for i, l in enumerate(self.pts_linears_b2m):
+            h2 = self.pts_linears_b2m[i](h2)
+            h2 = th.nn.functional.relu(h2)
+            if i in self.skips:
+                h2 = th.cat([x, h2], -1)
+        output_b2m = self.output_linear_b2m(h2)
+        output_clipped_b2m = th.max(th.min(output_b2m,  th.ones(size=output_b2m.shape).to(self.device)),
+                                th.zeros(size=output_b2m.shape).to(self.device))
+        return output_clipped_b2m
+
+    def forward(self, m, b):
+        m1 = self.forward_m2b(positional_encoding(b.unsqueeze(1), self.PE))
+        b1 = self.forward_b2m(positional_encoding(m.unsqueeze(1), self.PE))
+
+        # this needs positional encoding
+        b2m_m2b_b = self.forward_b2m(positional_encoding(m1, self.PE))
+        m2b_b2m_m = self.forward_m2b(positional_encoding(b1, self.PE))
+
+        return m1, b1, b2m_m2b_b, m2b_b2m_m
 
 
 if __name__ == '__main__':
