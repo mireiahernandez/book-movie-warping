@@ -20,7 +20,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone_GT', type=str, help='movie name')
+    parser.add_argument('--movie', default='Harry.Potter.and.the.Sorcerers.Stone', type=str, help='movie name')
     parser.add_argument('--direction', default='m2b', type=str, help='m2b or b2m')
     parser.add_argument('--gt_loss', default=0.0, type=float, help='weighting of gt loss')
     parser.add_argument('--rec_loss', default=0.0, type=float, help='weighting of rec loss')
@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
+    parser.add_argument('--resume', type=str, default='')
 
     args = parser.parse_args()
     # Define parameters
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     text_feats /= text_feats.norm(dim=0, keepdim=True)
 
     # Get GT dictionary
-    gt_dict = np.load(f"data/{args.movie}/gt_mapping_highsim.npy", allow_pickle=True)
+    gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
     gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
     train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
@@ -105,6 +106,9 @@ if __name__ == "__main__":
     # Define model
     model = MLP(input_size, device=device) #hidden_size1, hidden_size2, output_size, device=device)
     model = model.to(device)
+    if os.path.exists(args.resume):
+        model.load_state_dict(th.load(args.resume))
+        print(f'Model weights initialized from: {args.resume}')
 
     # Log model training
     wandb.watch(model, log="all")
