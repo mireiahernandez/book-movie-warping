@@ -93,6 +93,7 @@ if __name__ == "__main__":
 
     # Define model
     model = MLP_2dir(input_size, device=device, PE=args.pos_encoding) #hidden_size1, hidden_size2, output_size, device=device)
+    model.to(device)
     if os.path.exists(args.resume):
         model.load_state_dict(th.load(args.resume))
         print(f'Model weights initialized from: {args.resume}')
@@ -145,9 +146,9 @@ if __name__ == "__main__":
             b1_org_range = b1 * (len_book - 1) # shape No
             org_b1_org_range = org_b1 * (org_book_len - 1) # shape No
 
-            # CYCLE CONSISTENCY LOSS todo squeeze dims?
-            lossCC_m2b = l1_loss(org_movie_times_scaled, org_m2b_b2m_m)
-            lossCC_b2m = l1_loss(org_book_times_scaled, org_b2m_m2b_b)
+            # CYCLE CONSISTENCY LOSS
+            lossCC_b2m = l1_loss(org_movie_times_scaled, org_m2b_b2m_m)
+            lossCC_m2b = l1_loss(org_book_times_scaled, org_b2m_m2b_b)
 
             # GRADIENT PENALTY
             gradspred_m2b, = th.autograd.grad(org_m1_org_range, org_book_times,
@@ -201,7 +202,7 @@ if __name__ == "__main__":
             # Write to wandb
             wandb.log({'epoch': epoch, 'lr': lr,
                        'loss_cycle_consistency_m2b': lossCC_m2b, 'loss_cycle_consistency_b2m': lossCC_b2m,
-                       'grad_penalty_m2b': -grad_penalty_m2b, 'grad_penalty_b2m': grad_penalty_b2m,
+                       'grad_penalty_m2b': grad_penalty_m2b, 'grad_penalty_b2m': grad_penalty_b2m,
                        'lossGT_m2b': lossGT_m2b, 'lossGT_val_m2b': lossGT_val_m2b, 'lossGTD_m2b': lossGTD_m2b,
                        'lossGT_b2m': lossGT_b2m, 'lossGT_val_b2m': lossGT_val_b2m, 'lossGTD_b2m': lossGTD_b2m,
                        'coarse_reconstruction_m2b': -lossR_m2b, 'coarse_reconstruction_b2m': -lossR_b2m,
@@ -235,7 +236,7 @@ if __name__ == "__main__":
                 get_plot(org_book_times.cpu().detach().numpy(), org_m1_org_range.detach().cpu(), gt_dict,
                          split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog, dir='M2B')
                 get_plot(org_movie_times.cpu().detach().numpy(), org_b1_org_range.detach().cpu(), [gt_dict[1], gt_dict[0]],
-                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]], dir='M2B')
+                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]], dir='B2M')
                 plot_diff(movie_feats.cpu().data.numpy(),
                           pred_book_feats.cpu().data.numpy(),
                           book_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
