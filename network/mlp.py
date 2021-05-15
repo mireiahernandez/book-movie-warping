@@ -105,7 +105,7 @@ class MLP_2dir(nn.Module):
         self.W = W
         self.skips = skips
         self.device = device
-        self.PE = 6
+        self.PE = PE
         self.pts_linears_m2b = nn.ModuleList(
             [nn.Linear(input_size, W)] + [nn.Linear(W, W) if i not in self.skips else nn.Linear(W + input_size, W) for i in
                                         range(D - 1)])

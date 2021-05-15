@@ -28,19 +28,24 @@ if __name__ == "__main__":
     parser.add_argument('--cuda', type=int, default=0)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
     parser.add_argument('--resume', type=str, default='')
-    parser.add_argument('--loss_scaled', type=str, default='N')
+    parser.add_argument('--loss_scaled', type=str, default='yes')
+    parser.add_argument('--num_epochs', type=int, default=100)
+    parser.add_argument('--GP', type=float, default=0.)
+    parser.add_argument('--CC', type=float, default=0.)
+    parser.add_argument('--R', type=float, default=0.)
+    parser.add_argument('--GTD', type=float, default=0.)
+
 
     args = parser.parse_args()
     # Define parameters
     input_size = 1 + 2*args.pos_encoding
     output_size = 1
-    num_epochs = 100
     lr = args.lr
     weight_decay = 1e-4
     kernel_type = args.kernel_type
 
     # Tensorboard summary writer
-    exp_name = f"M2B2M_{args.exp_info}_try_{args.try_num}"
+    exp_name = f"M2B2M_{args.exp_info}_PE{args.pos_encoding}_GP{args.GP}_CC{args.CC}_R{args.R}_GTD{args.GTD}_{args.movie}"
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
@@ -132,8 +137,7 @@ if __name__ == "__main__":
         org_movie_times_scaled = org_movie_times / (org_movie_len - 1)
         org_book_times_scaled = org_book_times / (org_book_len - 1)
 
-        num_epochs = 150
-        for i in range(num_epochs):
+        for i in range(args.num_epochs):
             # 1st forward pass on the coarse scale
             m1, b1, b2m_m2b_b, m2b_b2m_m = model.forward(level_movie_times_scaled, level_book_times_scaled)
             # 2nd forward pass on the fine scale
@@ -219,9 +223,9 @@ if __name__ == "__main__":
             # Backpropagate and update losses
             # to do make GT loss [0,1]
             optimizer.zero_grad()
-            loss_ = lossCC_m2b + lossCC_b2m + grad_penalty_m2b + grad_penalty_b2m
-            loss_ += lossGT_m2b + lossGT_b2m + lossGTD_m2b + lossGTD_b2m
-            loss_ += lossR_m2b + lossR_b2m
+            loss_ = args.CC*lossCC_m2b + args.CC*lossCC_b2m + args.GP*grad_penalty_m2b + args.GP*grad_penalty_b2m
+            loss_ += lossGT_m2b + lossGT_b2m + args.GTD*lossGTD_m2b + args.GTD*lossGTD_b2m
+            loss_ += args.R*lossR_m2b + args.R*lossR_b2m
             # loss_ = args.gt_loss * lossGT + args.rec_loss * lossR + args.gtd_loss * lossGTD + grad_penalty
             loss_.backward(retain_graph=True)
             loss_now = loss_
