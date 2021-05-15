@@ -189,9 +189,15 @@ if __name__ == "__main__":
             pred_movie_feats = reverse_mapping(book_feats, b1_org_range.squeeze(), kernel_type).to(device)
             lossR_b2m = loss_rec(movie_feats, pred_movie_feats.to(device))
             # fine scale for logging
-            fine_pred_book_feats = reverse_mapping(org_movie_feats, org_m1_org_range.squeeze(), kernel_type).to(device)
+            if level == 0:
+                fine_pred_book_feats = pred_book_feats
+                fine_pred_movie_feats = pred_movie_feats
+            else:
+                fine_pred_book_feats = reverse_mapping(org_movie_feats, org_m1_org_range.squeeze(), kernel_type).to(device)
+                fine_pred_movie_feats = reverse_mapping(org_book_feats, org_b1_org_range.squeeze(), kernel_type).to(
+                    device)
+
             score_fine_scale_m2b = th.mul(fine_pred_book_feats, org_book_feats).sum(0).mean()
-            fine_pred_movie_feats = reverse_mapping(org_book_feats, org_b1_org_range.squeeze(), kernel_type).to(device)
             score_fine_scale_b2m = th.mul(fine_pred_movie_feats, org_movie_feats).sum(0).mean()
 
             gt_sim_score_m2b = th.mul(fine_pred_book_feats[:, gt_dict[0]], org_book_feats[:, gt_dict[0]]).sum(0).mean()
