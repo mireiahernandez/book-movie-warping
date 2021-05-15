@@ -44,7 +44,7 @@ if __name__ == "__main__":
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
-
+    use_pseudo_gt_dialog = False
     if th.cuda.is_available():
         device = 'cuda:{}'.format(args.cuda)
     else:
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     text_feats = np.load(f"data/{args.movie}/text_features.npy")
     org_book_len = text_feats.shape[0]
     org_movie_len = image_feats.shape[0]
-
+    print('Movie len:', org_movie_len, 'Book leni:', org_book_len)
     # # Get dialog times
     # dialog_times = np.load(f'data/{args.movie}/dialog_times_dict.npy',
     #                        allow_pickle=True).item()
@@ -76,7 +76,9 @@ if __name__ == "__main__":
 
     # Get GT dictionary
     gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
-    gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
+    if os.path.exists(f"data/{args.movie}/gt_dialog_matches.npy"):
+        use_pseudo_gt_dialog = True
+        gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
     train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
     val = [i for i in range(len(gt_dict)) if i not in train]
@@ -94,7 +96,6 @@ if __name__ == "__main__":
     # Define model
     model = MLP_2dir(input_size, device=device, PE=args.pos_encoding) #hidden_size1, hidden_size2, output_size, device=device)
     model.to(device)
-
     if os.path.exists(args.resume):
         model.load_state_dict(th.load(args.resume))
         print(f'Model weights initialized from: {args.resume}')
@@ -147,9 +148,9 @@ if __name__ == "__main__":
             b1_org_range = b1 * (len_book - 1) # shape No
             org_b1_org_range = org_b1 * (org_book_len - 1) # shape No
 
-            # CYCLE CONSISTENCY LOSS todo squeeze dims?
-            lossCC_m2b = l1_loss(org_movie_times_scaled, org_m2b_b2m_m)
-            lossCC_b2m = l1_loss(org_book_times_scaled, org_b2m_m2b_b)
+            # CYCLE CONSISTENCY LOSS
+            lossCC_b2m = l1_loss(org_movie_times_scaled, org_m2b_b2m_m)
+            lossCC_m2b = l1_loss(org_book_times_scaled, org_b2m_m2b_b)
 
             # GRADIENT PENALTY
             gradspred_m2b, = th.autograd.grad(org_m1_org_range, org_book_times,
@@ -167,19 +168,19 @@ if __name__ == "__main__":
             if args.loss_scaled == 'yes':
                 lossGT_m2b = l1_loss(org_m1[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device)/org_movie_len)
                 lossGT_val_m2b = l1_loss(org_m1[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device)/org_movie_len)
-                lossGTD_m2b = l1_loss(org_m1[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_movie_len)
+                lossGTD_m2b = l1_loss(org_m1[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_movie_len) if use_pseudo_gt_dialog else 0.
 
                 lossGT_b2m = l1_loss(org_b1[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device)/org_book_len)
                 lossGT_val_b2m = l1_loss(org_b1[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device)/org_book_len)
-                lossGTD_b2m = l1_loss(org_b1[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)/org_book_len)
+                lossGTD_b2m = l1_loss(org_b1[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)/org_book_len) if use_pseudo_gt_dialog else 0.
             else:
                 lossGT_m2b = l1_loss(org_m1_org_range[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device))
                 lossGT_val_m2b = l1_loss(org_m1_org_range[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device))
-                lossGTD_m2b = l1_loss(org_m1_org_range[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device))
+                lossGTD_m2b = l1_loss(org_m1_org_range[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)) if use_pseudo_gt_dialog else 0.
 
                 lossGT_b2m = l1_loss(org_b1_org_range[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device))
                 lossGT_val_b2m = l1_loss(org_b1_org_range[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device))
-                lossGTD_b2m = l1_loss(org_b1_org_range[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device))
+                lossGTD_b2m = l1_loss(org_b1_org_range[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)) if use_pseudo_gt_dialog else 0.
 
             # WARPING AND RECONSTRUCTION
             # coarse scale for training
@@ -195,15 +196,15 @@ if __name__ == "__main__":
 
             gt_sim_score_m2b = th.mul(fine_pred_book_feats[:, gt_dict[0]], org_book_feats[:, gt_dict[0]]).sum(0).mean()
             gt_sim_score_dialog_m2b = th.mul(fine_pred_book_feats[:, gt_dict_dialog[0]],
-                                         org_book_feats[:, gt_dict_dialog[0]]).sum(0).mean()
+                                         org_book_feats[:, gt_dict_dialog[0]]).sum(0).mean() if use_pseudo_gt_dialog else 0.
             gt_sim_score_b2m = th.mul(fine_pred_movie_feats[:, gt_dict[1]], org_movie_feats[:, gt_dict[1]]).sum(0).mean()
             gt_sim_score_dialog_b2m = th.mul(fine_pred_movie_feats[:, gt_dict_dialog[1]],
-                                         org_movie_feats[:, gt_dict_dialog[1]]).sum(0).mean()
+                                         org_movie_feats[:, gt_dict_dialog[1]]).sum(0).mean() if use_pseudo_gt_dialog else 0.
 
             # Write to wandb
             wandb.log({'epoch': epoch, 'lr': lr,
                        'loss_cycle_consistency_m2b': lossCC_m2b, 'loss_cycle_consistency_b2m': lossCC_b2m,
-                       'grad_penalty_m2b': -grad_penalty_m2b, 'grad_penalty_b2m': grad_penalty_b2m,
+                       'grad_penalty_m2b': grad_penalty_m2b, 'grad_penalty_b2m': grad_penalty_b2m,
                        'lossGT_m2b': lossGT_m2b, 'lossGT_val_m2b': lossGT_val_m2b, 'lossGTD_m2b': lossGTD_m2b,
                        'lossGT_b2m': lossGT_b2m, 'lossGT_val_b2m': lossGT_val_b2m, 'lossGTD_b2m': lossGTD_b2m,
                        'coarse_reconstruction_m2b': -lossR_m2b, 'coarse_reconstruction_b2m': -lossR_b2m,
@@ -235,10 +236,10 @@ if __name__ == "__main__":
 
                 # Visualize mapping
                 get_plot(org_book_times.cpu().detach().numpy(), org_m1_org_range.detach().cpu(), gt_dict,
-                         split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog, dir='M2B')
+                         split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog if use_pseudo_gt_dialog else None, dir='M2B')
                 plot_grad(gradspred_m2b.cpu().detach().numpy(), dir='M2B')
                 get_plot(org_movie_times.cpu().detach().numpy(), org_b1_org_range.detach().cpu(), [gt_dict[1], gt_dict[0]],
-                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]], dir='B2M')
+                         split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]] if use_pseudo_gt_dialog else None, dir='B2M')
                 plot_diff(movie_feats.cpu().data.numpy(),
                           pred_book_feats.cpu().data.numpy(),
                           book_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
