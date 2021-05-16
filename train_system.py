@@ -99,7 +99,7 @@ if __name__ == "__main__":
         org_input_feats, org_output_feats = image_feats.to(device), text_feats.to(device)
     else:
         gt_dict = [np.array([i['movie_ind'] for i in gt_dict]), np.array([i['book_ind'] for i in gt_dict])]
-        gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]]
+        gt_dict_dialog = [gt_dict_dialog[1], gt_dict_dialog[0]] if use_pseudo_gt_dialog else None
         org_len_input, org_len_output = book_len, movie_len
         org_input_feats, org_output_feats = text_feats.to(device), image_feats.to(device)
 
