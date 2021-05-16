@@ -53,6 +53,10 @@ if __name__ == "__main__":
     wandb.run.name = exp_name
     wandb.config.update(args)
 
+    use_pseudo_gt_dialog = False
+    if args.GTD > 0.:
+        use_pseudo_gt_dialog = True
+
     if th.cuda.is_available():
         device = 'cuda:{}'.format(args.cuda)
     else:
@@ -84,7 +88,8 @@ if __name__ == "__main__":
 
     # Get GT dictionary
     gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
-    gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
+    if use_pseudo_gt_dialog:
+        gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
     train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
     val = [i for i in range(len(gt_dict)) if i not in train]
@@ -174,7 +179,7 @@ if __name__ == "__main__":
 
             lossGT = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device)/org_len_input)
             lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device)/org_len_input)
-            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_len_input)
+            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_len_input) if use_pseudo_gt_dialog else 0.
 
             if level == 0:
                 fine_pred_output_feats = pred_output_feats
@@ -182,7 +187,7 @@ if __name__ == "__main__":
                 fine_pred_output_feats = reverse_mapping(org_input_feats, org_pred_invf_times.squeeze(), kernel_type).to(device)
             gt_sim_score = th.mul(fine_pred_output_feats[:, gt_dict[0]], org_output_feats[:, gt_dict[0]]).sum(0).mean()
             gt_sim_score_dialog = th.mul(fine_pred_output_feats[:, gt_dict_dialog[0]],
-                                         org_output_feats[:, gt_dict_dialog[0]]).sum(0).mean()
+                                         org_output_feats[:, gt_dict_dialog[0]]).sum(0).mean() if use_pseudo_gt_dialog else 0.
             score_fine_scale = th.mul(fine_pred_output_feats, org_output_feats).sum(0).mean()
             # Write to wandb
             wandb.log({'epoch': epoch,
@@ -219,7 +224,7 @@ if __name__ == "__main__":
 
                 # Visualize mapping
                 get_plot(org_output_times.cpu().detach().numpy(), org_pred_invf_times.detach().cpu(), gt_dict,
-                         split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog)
+                         split={'train': train, 'val': val}, gt_dict_dialog=gt_dict_dialog if use_pseudo_gt_dialog else None)
                 plot_diff(input_feats.cpu().data.numpy(),
                           pred_output_feats.cpu().data.numpy(),
                           output_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])

@@ -49,7 +49,11 @@ if __name__ == "__main__":
     wandb.init(project="book-movie-warping", entity="the-dream-team")
     wandb.run.name = exp_name
     wandb.config.update(args)
+
     use_pseudo_gt_dialog = False
+    if args.GTD > 0.:
+        use_pseudo_gt_dialog = True
+
     if th.cuda.is_available():
         device = 'cuda:{}'.format(args.cuda)
     else:
@@ -81,8 +85,7 @@ if __name__ == "__main__":
 
     # Get GT dictionary
     gt_dict = np.load(f"data/{args.movie}/gt_mapping.npy", allow_pickle=True)
-    if os.path.exists(f"data/{args.movie}/gt_dialog_matches.npy"):
-        use_pseudo_gt_dialog = True
+    if use_pseudo_gt_dialog:
         gt_dict_dialog = np.load(f"data/{args.movie}/gt_dialog_matches.npy")
     rng = np.random.default_rng(2021)
     train = sorted(rng.choice(range(len(gt_dict)), len(gt_dict)//2+1, False))
