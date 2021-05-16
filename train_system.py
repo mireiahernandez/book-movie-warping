@@ -157,10 +157,10 @@ if __name__ == "__main__":
         org_output_times_scaled = org_output_times / (org_len_output - 1)
 
         for i in range(args.num_epochs): # epoch < 500:
-            inp1 = positional_encoding(level_output_times_scaled, num_encoding_functions=args.pos_encoding)
-            inp2 = positional_encoding(org_output_times_scaled, num_encoding_functions=args.pos_encoding)
-            pred_invf_times_scaled = model.forward(inp1.unsqueeze(1)).squeeze()
-            org_pred_invf_times_scaled = model.forward(inp2.unsqueeze(1)).squeeze()
+            inp1 = positional_encoding(level_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
+            inp2 = positional_encoding(org_output_times_scaled.unsqueeze(1), num_encoding_functions=args.pos_encoding)
+            pred_invf_times_scaled = model.forward(inp1).squeeze()
+            org_pred_invf_times_scaled = model.forward(inp2).squeeze()
             # re-scale to 0 len_output -1
             pred_invf_times = pred_invf_times_scaled * (len_input - 1) # shape No
             org_pred_invf_times = org_pred_invf_times_scaled * (org_len_input - 1) # shape No
@@ -172,9 +172,9 @@ if __name__ == "__main__":
             pred_output_feats = reverse_mapping(input_feats, pred_invf_times.squeeze(), kernel_type).to(device)
             lossR = loss_rec(output_feats, pred_output_feats.to(device))
 
-            lossGT = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]/org_len_input).to(device))
-            lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]/org_len_input).to(device))
-            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]/org_len_input).to(device))
+            lossGT = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device)/org_len_input)
+            lossGT_val = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device)/org_len_input)
+            lossGTD = th.nn.functional.l1_loss(org_pred_invf_times_scaled[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_len_input)
 
             if level == 0:
                 fine_pred_output_feats = pred_output_feats

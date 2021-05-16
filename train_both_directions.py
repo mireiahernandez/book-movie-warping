@@ -26,7 +26,6 @@ if __name__ == "__main__":
     parser.add_argument('--exp_info', default='', type=str)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--cuda', type=int, default=0)
-    parser.add_argument('--num_epochs', type=int, default=150)
     parser.add_argument('--num_image_pyramid_levels', type=int, default=5)
     parser.add_argument('--resume', type=str, default='')
     parser.add_argument('--loss_scaled', type=str, default='yes')
