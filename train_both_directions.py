@@ -34,6 +34,7 @@ if __name__ == "__main__":
     parser.add_argument('--CC', type=float, default=0.)
     parser.add_argument('--R', type=float, default=0.)
     parser.add_argument('--GTD', type=float, default=0.)
+    parser.add_argument('--GPcutoff', type=float, default=0.)
 
 
     args = parser.parse_args()
@@ -116,43 +117,101 @@ if __name__ == "__main__":
     l1_loss = th.nn.L1Loss()
     # Define optimizer
     optimizer = th.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = th.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.75)
 
     # Begin training
     start_time = time.time()
-    loss_prev, loss_now = 0, 1000
     epoch = 0
+
+    # Get lens
+    len_book = [text_pyramid[level].shape[1] for level in range(args.num_image_pyramid_levels)]
+    len_movie = [image_pyramid[level].shape[1] for level in range(args.num_image_pyramid_levels)]
+
+    # Define input feats
+    movie_feats = [th.FloatTensor(image_pyramid[level]).to(device) for level in range(args.num_image_pyramid_levels)]
+    book_feats = [th.FloatTensor(text_pyramid[level]).to(device) for level in range(args.num_image_pyramid_levels)]
+
+    # Get input and output times
+    level_movie_times = [th.FloatTensor(np.arange(len_movie[level])).to(device) for level in range(args.num_image_pyramid_levels)]
+    level_book_times = [th.autograd.Variable(th.FloatTensor(np.arange(len_book[level])).to(device), requires_grad=True) for level in range(args.num_image_pyramid_levels)]
+    org_movie_times = th.FloatTensor(np.arange(org_movie_len)).to(device)
+    org_book_times = th.autograd.Variable(th.FloatTensor(np.arange(org_book_len)).to(device), requires_grad=True)
+
+    # Scale input and output times to [0,1]
+    level_movie_times_scaled = [level_movie_times[level] / (len_movie[level] - 1) for level in range(args.num_image_pyramid_levels)]
+    level_book_times_scaled = [level_book_times[level] / (len_book[level] - 1) for level in range(args.num_image_pyramid_levels)]
+    org_movie_times_scaled = org_movie_times / (org_movie_len - 1)
+    org_book_times_scaled = org_book_times / (org_book_len - 1)
+
+    for i in range(300):
+        org_m1, org_b1, org_b2m_m2b_b, org_m2b_b2m_m = model.forward(org_movie_times_scaled, org_book_times_scaled)
+        org_b2m_m2b_b, org_m2b_b2m_m = org_b2m_m2b_b.squeeze(), org_m2b_b2m_m.squeeze()
+        org_m1, org_b1 = org_m1.squeeze(), org_b1.squeeze()
+        org_m1_org_range = org_m1 * (org_movie_len - 1)  # shape No
+        org_b1_org_range = org_b1 * (org_book_len - 1)  # shape No
+        # GROUND TRUTH REGRESSION
+        lossGT_m2b = l1_loss(org_m1[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device) / org_movie_len)
+        lossGT_val_m2b = l1_loss(org_m1[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device) / org_movie_len)
+
+        lossGT_b2m = l1_loss(org_b1[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device) / org_book_len)
+        lossGT_val_b2m = l1_loss(org_b1[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device) / org_book_len)
+        # GRADIENT PENALTY
+        gradspred_m2b, = th.autograd.grad(org_m1_org_range, org_book_times,
+                                          grad_outputs=org_m1_org_range.data.new(org_m1_org_range.shape).fill_(1),
+                                          retain_graph=True, create_graph=True)
+        gradspred_b2m, = th.autograd.grad(org_b1_org_range, org_movie_times,
+                                          grad_outputs=org_b1_org_range.data.new(org_b1_org_range.shape).fill_(1),
+                                          retain_graph=True, create_graph=True)
+
+        grad_penalty_m2b = -gradspred_m2b[gradspred_m2b < args.GPcutoff].mean() if len(
+            gradspred_m2b[gradspred_m2b < args.GPcutoff]) > 0 else 0.
+        grad_penalty_b2m = -gradspred_b2m[gradspred_b2m < args.GPcutoff].mean() if len(
+            gradspred_b2m[gradspred_b2m < args.GPcutoff]) > 0 else 0.
+
+        # CYCLE CONSISTENCY LOSS
+        lossCC_b2m = l1_loss(org_movie_times_scaled, org_m2b_b2m_m)
+        lossCC_m2b = l1_loss(org_book_times_scaled, org_b2m_m2b_b)
+
+        optimizer.zero_grad()
+        loss_ = lossGT_m2b + lossGT_b2m + args.GP*grad_penalty_m2b + args.GP*grad_penalty_b2m
+        loss_ += args.CC * lossCC_m2b + args.CC * lossCC_b2m
+        loss_.backward(retain_graph=True)
+        optimizer.step()
+        if i % 25 == 0:
+            # Visualize mapping
+            get_plot(org_book_times.cpu().detach().numpy(), org_m1_org_range.detach().cpu(), gt_dict,
+                     split={'train': train, 'val': val},
+                     gt_dict_dialog=gt_dict_dialog if use_pseudo_gt_dialog else None, dir='M2B')
+            get_plot(org_movie_times.cpu().detach().numpy(), org_b1_org_range.detach().cpu(), [gt_dict[1], gt_dict[0]],
+                     split={'train': train, 'val': val},
+                     gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]] if use_pseudo_gt_dialog else None, dir='B2M')
+            wandb.log({'epoch': epoch,
+                   'loss_cycle_consistency_m2b': 0, 'loss_cycle_consistency_b2m': 0,
+                   'grad_penalty_m2b': 0, 'grad_penalty_b2m': 0,
+                   'lossGT_m2b': lossGT_m2b, 'lossGT_val_m2b': lossGT_val_m2b, 'lossGTD_m2b': 0,
+                   'lossGT_b2m': lossGT_b2m, 'lossGT_val_b2m': lossGT_val_b2m, 'lossGTD_b2m': 0,
+                   'coarse_reconstruction_m2b': 0, 'coarse_reconstruction_b2m': 0,
+                   'fine_reconstruction_m2b': 0, 'fine_reconstruction_b2m': 0,
+                   'gt_reconstruction_m2b': 0, 'gt_reconstruction_b2m': 0, 'lr': scheduler.get_last_lr(),
+
+                   })
+        epoch += 1
+    scheduler.step()
 
     # coarse to fine alignment
     for level in reversed(range(args.num_image_pyramid_levels)):
-        # Get lens
-        len_book = text_pyramid[level].shape[1]
-        len_movie = image_pyramid[level].shape[1]
-        movie_feats = th.FloatTensor(image_pyramid[level]).to(device)
-        book_feats = th.FloatTensor(text_pyramid[level]).to(device)
-
-        # Get input and output times
-        level_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(len_movie)), requires_grad=True).to(device)
-        level_book_times = th.autograd.Variable(th.FloatTensor(np.arange(len_book)), requires_grad=True).to(device)
-        org_movie_times = th.autograd.Variable(th.FloatTensor(np.arange(org_movie_len)), requires_grad=True).to(device)
-        org_book_times = th.autograd.Variable(th.FloatTensor(np.arange(org_book_len)), requires_grad=True).to(device)
-
-        # Scale input and output times to [0,1]
-        level_movie_times_scaled = level_movie_times / (len_movie - 1)
-        level_book_times_scaled = level_book_times / (len_book - 1)
-        org_movie_times_scaled = org_movie_times / (org_movie_len - 1)
-        org_book_times_scaled = org_book_times / (org_book_len - 1)
-
+        num_now = args.num_image_pyramid_levels - level
         for i in range(args.num_epochs):
             # 1st forward pass on the coarse scale
-            m1, b1, b2m_m2b_b, m2b_b2m_m = model.forward(level_movie_times_scaled, level_book_times_scaled)
+            m1, b1, b2m_m2b_b, m2b_b2m_m = [model.forward(level_movie_times_scaled[i], level_book_times_scaled[i]) for i in range(num_now)]
             # 2nd forward pass on the fine scale
             org_m1, org_b1, org_b2m_m2b_b, org_m2b_b2m_m = model.forward(org_movie_times_scaled, org_book_times_scaled)
             org_b2m_m2b_b, org_m2b_b2m_m = org_b2m_m2b_b.squeeze(), org_m2b_b2m_m.squeeze()
             org_m1, org_b1 = org_m1.squeeze(), org_b1.squeeze()
             # re-scale to 0 len_output -1
-            m1_org_range = m1 * (len_movie - 1) # shape No
+            m1_org_range = [m1[i] * (len_movie[args.num_image_pyramid_levels-1-i] - 1) for i in range(num_now)]# shape No
             org_m1_org_range = org_m1 * (org_movie_len - 1) # shape No
-            b1_org_range = b1 * (len_book - 1) # shape No
+            b1_org_range = [b1[i] * (len_book[args.num_image_pyramid_levels-1-i] - 1) for i in range(num_now)] # shape No
             org_b1_org_range = org_b1 * (org_book_len - 1) # shape No
 
             # CYCLE CONSISTENCY LOSS
@@ -167,38 +226,40 @@ if __name__ == "__main__":
                                        grad_outputs=org_b1_org_range.data.new(org_b1_org_range.shape).fill_(1),
                                        retain_graph=True, create_graph=True)
 
-            grad_penalty_m2b = -gradspred_m2b[gradspred_m2b < 0].mean() if len(gradspred_m2b[gradspred_m2b < 0]) > 0 else 0.
-            grad_penalty_b2m = -gradspred_b2m[gradspred_b2m < 0].mean() if len(gradspred_b2m[gradspred_b2m < 0]) > 0 else 0.
+            grad_penalty_m2b = -gradspred_m2b[gradspred_m2b < args.GPcutoff].mean() if len(gradspred_m2b[gradspred_m2b < args.GPcutoff]) > 0 else 0.
+            grad_penalty_b2m = -gradspred_b2m[gradspred_b2m < args.GPcutoff].mean() if len(gradspred_b2m[gradspred_b2m < args.GPcutoff]) > 0 else 0.
 
 
             # GROUND TRUTH REGRESSION
-            if args.loss_scaled == 'yes':
-                lossGT_m2b = l1_loss(org_m1[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device)/org_movie_len)
-                lossGT_val_m2b = l1_loss(org_m1[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device)/org_movie_len)
-                lossGTD_m2b = l1_loss(org_m1[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_movie_len) if use_pseudo_gt_dialog else 0.
+            lossGT_m2b = l1_loss(org_m1[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device)/org_movie_len)
+            lossGT_val_m2b = l1_loss(org_m1[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device)/org_movie_len)
+            lossGTD_m2b = l1_loss(org_m1[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)/org_movie_len) if use_pseudo_gt_dialog else 0.
 
-                lossGT_b2m = l1_loss(org_b1[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device)/org_book_len)
-                lossGT_val_b2m = l1_loss(org_b1[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device)/org_book_len)
-                lossGTD_b2m = l1_loss(org_b1[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)/org_book_len) if use_pseudo_gt_dialog else 0.
-            else:
-                lossGT_m2b = l1_loss(org_m1_org_range[gt_dict[0][train]], th.LongTensor(gt_dict[1][train]).to(device))
-                lossGT_val_m2b = l1_loss(org_m1_org_range[gt_dict[0][val]], th.LongTensor(gt_dict[1][val]).to(device))
-                lossGTD_m2b = l1_loss(org_m1_org_range[gt_dict_dialog[0]], th.FloatTensor(gt_dict_dialog[1]).to(device)) if use_pseudo_gt_dialog else 0.
+            lossGT_b2m = l1_loss(org_b1[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device)/org_book_len)
+            lossGT_val_b2m = l1_loss(org_b1[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device)/org_book_len)
+            lossGTD_b2m = l1_loss(org_b1[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)/org_book_len) if use_pseudo_gt_dialog else 0.
 
-                lossGT_b2m = l1_loss(org_b1_org_range[gt_dict[1][train]], th.LongTensor(gt_dict[0][train]).to(device))
-                lossGT_val_b2m = l1_loss(org_b1_org_range[gt_dict[1][val]], th.LongTensor(gt_dict[0][val]).to(device))
-                lossGTD_b2m = l1_loss(org_b1_org_range[gt_dict_dialog[1]], th.FloatTensor(gt_dict_dialog[0]).to(device)) if use_pseudo_gt_dialog else 0.
 
             # WARPING AND RECONSTRUCTION
             # coarse scale for training
-            pred_book_feats = reverse_mapping(movie_feats, m1_org_range.squeeze(), kernel_type).to(device)
-            lossR_m2b = loss_rec(book_feats, pred_book_feats.to(device))
-            pred_movie_feats = reverse_mapping(book_feats, b1_org_range.squeeze(), kernel_type).to(device)
-            lossR_b2m = loss_rec(movie_feats, pred_movie_feats.to(device))
+            pred_book_feats = [reverse_mapping(movie_feats[args.num_image_pyramid_levels-1-i], m1_org_range[i].squeeze(), kernel_type).to(device)
+                               for i in range(num_now)]
+            lossR_m2b = [loss_rec(book_feats[args.num_image_pyramid_levels-1-i], pred_book_feats[i].to(device))
+                         for i in range(num_now)]
+            pred_movie_feats = [reverse_mapping(book_feats[args.num_image_pyramid_levels-1-i], b1_org_range[i].squeeze(), kernel_type).to(device)
+                                for i in range(num_now)]
+            lossR_b2m = [loss_rec(movie_feats[args.num_image_pyramid_levels-1-i], pred_movie_feats[i].to(device))
+                        for i in range(num_now)]
+
+            weightsR = [(i+1)/len(lossR_m2b) for i in range(len(lossR_m2b))]
+            weightsR = np.array(weightsR)/sum(weightsR)
+            lossR_m2b = sum([i*j for i,j in zip(weightsR, lossR_m2b)])
+            lossR_b2m = sum([i*j for i,j in zip(weightsR, lossR_b2m)])
+
             # fine scale for logging
             if level == 0:
-                fine_pred_book_feats = pred_book_feats
-                fine_pred_movie_feats = pred_movie_feats
+                fine_pred_book_feats = pred_book_feats[-1]
+                fine_pred_movie_feats = pred_movie_feats[-1]
             else:
                 fine_pred_book_feats = reverse_mapping(org_movie_feats, org_m1_org_range.squeeze(), kernel_type).to(device)
                 fine_pred_movie_feats = reverse_mapping(org_book_feats, org_b1_org_range.squeeze(), kernel_type).to(
@@ -215,7 +276,7 @@ if __name__ == "__main__":
                                          org_movie_feats[:, gt_dict_dialog[1]]).sum(0).mean() if use_pseudo_gt_dialog else 0.
 
             # Write to wandb
-            wandb.log({'epoch': epoch, 'lr': lr,
+            wandb.log({'epoch': epoch, 'lr': scheduler.get_last_lr(),
                        'loss_cycle_consistency_m2b': lossCC_m2b, 'loss_cycle_consistency_b2m': lossCC_b2m,
                        'grad_penalty_m2b': grad_penalty_m2b, 'grad_penalty_b2m': grad_penalty_b2m,
                        'lossGT_m2b': lossGT_m2b, 'lossGT_val_m2b': lossGT_val_m2b, 'lossGTD_m2b': lossGTD_m2b,
@@ -245,7 +306,7 @@ if __name__ == "__main__":
                 print(message)
                 if epoch == 0:
                     # Visualize input and output
-                    visualize_input(movie_feats.cpu().data.numpy(), book_feats.cpu().data.numpy())
+                    visualize_input(movie_feats[0].cpu().data.numpy(), book_feats[0].cpu().data.numpy())
 
                 # Visualize mapping
                 get_plot(org_book_times.cpu().detach().numpy(), org_m1_org_range.detach().cpu(), gt_dict,
@@ -253,13 +314,13 @@ if __name__ == "__main__":
                 plot_grad(gradspred_m2b.cpu().detach().numpy(), dir='M2B')
                 get_plot(org_movie_times.cpu().detach().numpy(), org_b1_org_range.detach().cpu(), [gt_dict[1], gt_dict[0]],
                          split={'train': train, 'val': val}, gt_dict_dialog=[gt_dict_dialog[1], gt_dict_dialog[0]] if use_pseudo_gt_dialog else None, dir='B2M')
-                plot_diff(movie_feats.cpu().data.numpy(),
-                          pred_book_feats.cpu().data.numpy(),
-                          book_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
+                # plot_diff(movie_feats.cpu().data.numpy(),
+                #           pred_book_feats.cpu().data.numpy(),
+                #           book_feats.cpu().data.numpy(), titles=['Input', 'Prediction', 'Output', 'Difference'])
                 plot_grad(gradspred_b2m.cpu().detach().numpy(), dir='B2M')
 
             epoch += 1
-
+        scheduler.step()
     
     end_time = time.time()
     save_path = f"outputs/{args.movie}"
