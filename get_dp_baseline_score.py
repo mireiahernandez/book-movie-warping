@@ -108,8 +108,13 @@ if __name__ == "__main__":
     for i,j in zip(s1, s2):
         if type(j) != list:
             points.append((i, j))
-    alignment = np.array(points)
     # plt.plot(np.array(points)[:, 0], np.array(points)[:, 1])
     # plt.show()
+    alignment = np.array(points)
+    score = []
+    for i, target in zip(gt_dict[0][val], gt_dict[1][val]):
+        pred = alignment[-i+1][1]
+        score.append(np.abs(pred-target)/movie_len)
+    print('Validation alignment score :', np.mean(score))
     np.save(f"data/{args.movie}/dp_alignment.npy", alignment)
 
